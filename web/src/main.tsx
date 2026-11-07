@@ -1,0 +1,24 @@
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { Provider } from 'react-redux'
+import { BrowserRouter } from 'react-router-dom'
+import { store } from './store'
+import App from './App'
+import './index.css'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <Provider store={store}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </Provider>
+  </StrictMode>,
+)
+
+// Push notifications need a service worker; dev builds skip it so stale workers never shadow the dev server.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  try {
+    void navigator.serviceWorker.register('/sw.js').catch(() => { /* push stays unavailable */ })
+  } catch { /* insecure context or blocked: push stays unavailable */ }
+}

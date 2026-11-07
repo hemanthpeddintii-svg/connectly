@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Connectly">
+  <defs>
+    <clipPath id="left-ring"><circle cx="212" cy="256" r="84"/></clipPath>
+  </defs>
+  <!-- Full-bleed background and a mark inside the central 80% so the icon survives maskable cropping. -->
+  <rect width="512" height="512" fill="#1c1917"/>
+  <circle cx="300" cy="256" r="84" fill="#f59e0b" clip-path="url(#left-ring)"/>
+  <circle cx="212" cy="256" r="84" fill="none" stroke="#fafaf9" stroke-width="24"/>
+  <circle cx="300" cy="256" r="84" fill="none" stroke="#fafaf9" stroke-width="24"/>
+</svg>
