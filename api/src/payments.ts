@@ -6,20 +6,18 @@ import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { z } from 'zod'
 import { db, newId } from './db.ts'
-import { authed, requireActive, requireAdmin } from './guards.ts'
+import { authed, getUser, requireActive, requireAdmin } from './guards.ts'
 import { PLANS, getPlan, paymentInstructions } from './plans.ts'
 import { UPLOAD_DIR, removeQuietly, sniffImage, tx } from './verification.ts'
 
 const MAX_PROOF = 5 * 1024 * 1024
-const DAY = 24 * 60 * 60 * 1000
-
 type PaymentRow = {
-  id: string; user_id: string; plan_id: string; amount_paise: number; days: number; reference: string
+  id: string; user_id: string; plan_id: string; amount_paise: number; days: number; credits: number; reference: string
   proof_file: string; proof_mime: string; status: string; reason: string | null; created_at: number; reviewed_at: number | null
 }
 
 const present = (p: PaymentRow) => ({
-  id: p.id, planId: p.plan_id, amountPaise: p.amount_paise, days: p.days, reference: p.reference,
+  id: p.id, planId: p.plan_id, amountPaise: p.amount_paise, requests: p.credits, reference: p.reference,
   status: p.status, reason: p.reason, createdAt: p.created_at, reviewedAt: p.reviewed_at,
 })
 
@@ -27,7 +25,13 @@ export async function paymentRoutes(app: FastifyInstance) {
   await app.register(multipart, { limits: { fileSize: MAX_PROOF, files: 1, fields: 2, parts: 3 } })
   const member = { ...authed, preHandler: [requireActive] }
 
-  app.get('/v0/membership/plans', member, async () => ({ plans: PLANS, payment: paymentInstructions() }))
+  // Request packs are for men; women use the community free.
+  const notMan = (id: string) => getUser(id)?.gender !== 'man'
+
+  app.get('/v0/membership/plans', member, async (req, reply) => {
+    if (notMan(req.user.sub)) return reply.code(403).send({ error: 'not_applicable' })
+    return { plans: PLANS, payment: paymentInstructions() }
+  })
 
   app.get('/v0/payments/mine', member, async (req) => {
     const rows = db.prepare('SELECT * FROM payments WHERE user_id = ? ORDER BY created_at DESC LIMIT 50').all(req.user.sub) as PaymentRow[]
@@ -35,6 +39,7 @@ export async function paymentRoutes(app: FastifyInstance) {
   })
 
   app.post('/v0/payments', member, async (req, reply) => {
+    if (notMan(req.user.sub)) return reply.code(403).send({ error: 'not_applicable' })
     if (!req.isMultipart()) return reply.code(415).send({ error: 'multipart_required' })
     const fields: Record<string, string> = {}
     let proof: Buffer | undefined
@@ -75,10 +80,10 @@ export async function paymentRoutes(app: FastifyInstance) {
         if (db.prepare("SELECT 1 FROM payments WHERE user_id = ? AND status = 'pending'").get(req.user.sub)) return 'payment_pending' as const
         if (db.prepare("SELECT 1 FROM payments WHERE reference = ? AND status != 'rejected'").get(input.data.reference)) return 'reference_used' as const
         if (db.prepare("SELECT 1 FROM payments WHERE proof_sha256 = ? AND status != 'rejected'").get(sha)) return 'proof_reused' as const
-        // Price and duration are snapshotted from the server-side plan, never taken from the client.
+        // Price and request count are snapshotted from the server-side plan, never taken from the client.
         db.prepare(
-          'INSERT INTO payments (id,user_id,plan_id,amount_paise,days,reference,proof_file,proof_mime,proof_sha256,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
-        ).run(newId(), req.user.sub, plan.id, plan.amountPaise, plan.days, input.data.reference, file, type.mime, sha, Date.now())
+          'INSERT INTO payments (id,user_id,plan_id,amount_paise,days,credits,reference,proof_file,proof_mime,proof_sha256,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        ).run(newId(), req.user.sub, plan.id, plan.amountPaise, 0, plan.requests, input.data.reference, file, type.mime, sha, Date.now())
         return 'ok' as const
       })
     } catch (e) {
@@ -135,12 +140,8 @@ export async function paymentRoutes(app: FastifyInstance) {
         "UPDATE payments SET status=?, reason=?, reviewed_by=?, reviewed_at=? WHERE id=? AND status='pending'",
       ).run(approve ? 'approved' : 'rejected', body.data.decision === 'reject' ? body.data.reason : null, req.user.sub, Date.now(), p.id)
       if (res.changes === 0) return 'already_decided' as const
-      if (approve) {
-        // Renewals stack: time is added after the current expiry if the member is still active.
-        const u = db.prepare('SELECT membership_expires_at FROM users WHERE id = ?').get(p.user_id) as { membership_expires_at: number | null }
-        const start = Math.max(Date.now(), u.membership_expires_at ?? 0)
-        db.prepare('UPDATE users SET membership_expires_at = ? WHERE id = ?').run(start + p.days * DAY, p.user_id)
-      }
+      // Approval adds the pack's requests to the member's balance, in the same transaction as the decision.
+      if (approve) db.prepare('UPDATE users SET request_credits = request_credits + ? WHERE id = ?').run(p.credits, p.user_id)
       return 'ok' as const
     })
     if (outcome === 'not_found') return reply.code(404).send({ error: 'not_found' })

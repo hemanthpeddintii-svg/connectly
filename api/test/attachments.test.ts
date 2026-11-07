@@ -7,9 +7,22 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 const PORT = 4500 + Math.floor(Math.random() * 100)
-const BASE = `http://127.0.0.1:${PORT}/v0`
+// `ctx` points the helpers at whichever server a describe block is exercising.
+const ctx = { port: PORT, dbPath: '' }
 let proc: ChildProcess
 let dir: string
+
+async function startServer(port: number, d: string, extraEnv: Record<string, string> = {}) {
+  const p = spawn(process.execPath, ['src/server.ts'], {
+    env: { ...process.env, PORT: String(port), DB_PATH: path.join(d, 't.db'), UPLOAD_DIR: path.join(d, 'up'), ADMIN_EMAILS: 'admin@att.test', ...extraEnv },
+    stdio: 'ignore',
+  })
+  for (let i = 0; i < 50; i++) {
+    try { if ((await fetch(`http://127.0.0.1:${port}/health`)).ok) break } catch { /* not up yet */ }
+    await new Promise((r) => setTimeout(r, 100))
+  }
+  return p
+}
 
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('jpeg-body-bytes'), Buffer.alloc(64, 7)])
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 9)])
@@ -23,15 +36,16 @@ async function call(method: string, url: string, opts: { token?: string; json?: 
   let body: BodyInit | undefined
   if (opts.json !== undefined) { headers['content-type'] = 'application/json'; body = JSON.stringify(opts.json) }
   if (opts.form) body = opts.form
-  return fetch(BASE + url, { method, headers, body })
+  return fetch(`http://127.0.0.1:${ctx.port}/v0` + url, { method, headers, body })
 }
 
-type Account = { token: string; user: { bumpId: string } }
+type Gender = 'man' | 'woman'
+type Account = { token: string; user: { bumpId: string }; email: string; gender: Gender }
 
-async function signup(email: string, name: string) {
-  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30 } })
+async function signup(email: string, name: string, gender: Gender = 'woman') {
+  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
   assert.equal(r.status, 200)
-  return (await r.json()) as Account
+  return { ...((await r.json()) as Omit<Account, 'email' | 'gender'>), email, gender } as Account
 }
 
 function upload(file: Buffer, opts: { mime?: string; name?: string; durationMs?: string; field?: string } = {}) {
@@ -45,8 +59,8 @@ const send = (token: string, conn: string, file: Buffer, opts?: Parameters<typeo
   call('POST', `/connections/${conn}/attachments`, { token, form: upload(file, opts) })
 
 /** Signs up a member and has the admin approve their verification. */
-async function activeUser(admin: Account, email: string, name: string) {
-  const u = await signup(email, name)
+async function activeUser(admin: Account, email: string, name: string, gender: Gender = 'woman') {
+  const u = await signup(email, name, gender)
   const f = new FormData()
   f.set('selfie', new Blob([new Uint8Array(JPEG)]), 'a.jpg')
   f.set('voice', new Blob([new Uint8Array(WEBM)]), 'v.webm')
@@ -57,30 +71,35 @@ async function activeUser(admin: Account, email: string, name: string) {
   return u
 }
 
+/** Connects a man and a woman (either order) through the request flow. */
 async function connect(a: Account, b: Account) {
-  await call('POST', '/actions', { token: a.token, json: { bumpId: b.user.bumpId, action: 'like' } })
-  const r = (await (await call('POST', '/actions', { token: b.token, json: { bumpId: a.user.bumpId, action: 'like' } })).json()) as any
-  assert.equal(r.matched, true)
-  return r.connectionId as string
+  const [man, woman] = a.gender === 'man' ? [a, b] : [b, a]
+  assert.equal(man.gender, 'man')
+  assert.equal(woman.gender, 'woman')
+  const sqlite = new DatabaseSync(ctx.dbPath)
+  sqlite.exec('PRAGMA busy_timeout = 5000')
+  try { sqlite.prepare('UPDATE users SET request_credits = ? WHERE email = ?').run(5, man.email) } finally { sqlite.close() }
+  const sent = await call('POST', '/requests', { token: man.token, json: { bumpId: woman.user.bumpId, note: 'hi' } })
+  assert.equal(sent.status, 201)
+  const { id } = (await sent.json()) as { id: string }
+  const r = await call('POST', `/requests/${id}/decision`, { token: woman.token, json: { decision: 'accept' } })
+  assert.equal(r.status, 200)
+  const j = (await r.json()) as any
+  assert.equal(j.status, 'accepted')
+  return j.connectionId as string
 }
 
 let admin: Account
-let alice: Account // verified, no membership
-let carol: Account // verified, outsider
+let alice: Account // verified woman
+let carol: Account // verified woman, outsider
 let conn: string // admin <-> alice
 
 before(async () => {
   dir = await mkdtemp(path.join(tmpdir(), 'connectly-att-'))
-  proc = spawn(process.execPath, ['src/server.ts'], {
-    env: { ...process.env, PORT: String(PORT), DB_PATH: path.join(dir, 't.db'), UPLOAD_DIR: path.join(dir, 'up'), ADMIN_EMAILS: 'admin@att.test' },
-    stdio: 'ignore',
-  })
-  for (let i = 0; i < 50; i++) {
-    try { if ((await fetch(`http://127.0.0.1:${PORT}/health`)).ok) break } catch { /* not up yet */ }
-    await new Promise((r) => setTimeout(r, 100))
-  }
-  // Admins skip the membership requirement, so the admin is the sending member.
-  admin = await signup('admin@att.test', 'Admin')
+  ctx.port = PORT
+  ctx.dbPath = path.join(dir, 't.db')
+  proc = await startServer(PORT, dir, { ALLOW_CHAT_IMAGES: 'true' })
+  admin = await signup('admin@att.test', 'Admin', 'man')
   alice = await activeUser(admin, 'alice@att.test', 'Alice')
   carol = await activeUser(admin, 'carol@att.test', 'Carol')
   conn = await connect(admin, alice)
@@ -251,13 +270,12 @@ describe('authorization', () => {
     assert.equal((await call('GET', `/connections/${other}/messages/${msgId}/attachment`, { token: admin.token })).status, 404)
   })
 
-  it('a member without a membership gets 402 and nothing is stored', async () => {
-    const before = (await readdir(path.join(dir, 'up', 'chat'))).length
+  it('either participant can send without any membership, and reading is open to both', async () => {
     const r = await send(alice.token, conn, JPEG)
-    assert.equal(r.status, 402)
-    assert.equal(((await r.json()) as any).error, 'membership_required')
-    assert.equal((await readdir(path.join(dir, 'up', 'chat'))).length, before)
-    // reading stays free
+    assert.equal(r.status, 201)
+    const msg = (await r.json()) as any
+    assert.equal(msg.mine, true)
+    assert.equal((await call('GET', `/connections/${conn}/messages/${msg.id}/attachment`, { token: admin.token })).status, 200)
     assert.equal((await call('GET', `/connections/${conn}/messages/${msgId}/attachment`, { token: alice.token })).status, 200)
   })
 })
@@ -326,5 +344,49 @@ describe('realtime delivery', () => {
     assert.equal(echoed, 'none')
     ws.close()
     senderWs.close()
+  })
+})
+
+describe('images disabled (default server)', () => {
+  let dir2: string
+  let proc2: ChildProcess
+  let man: Account
+  let woman: Account
+  let c: string
+  before(async () => {
+    dir2 = await mkdtemp(path.join(tmpdir(), 'connectly-att-off-'))
+    ctx.port = PORT + 1000
+    ctx.dbPath = path.join(dir2, 't.db')
+    proc2 = await startServer(ctx.port, dir2)
+    const adm = await signup('admin@att.test', 'Admin', 'man')
+    man = adm
+    woman = await activeUser(adm, 'wendy@att.test', 'Wendy')
+    c = await connect(man, woman)
+  })
+  after(async () => {
+    proc2.kill()
+    await rm(dir2, { recursive: true, force: true })
+    ctx.port = PORT
+    ctx.dbPath = path.join(dir, 't.db')
+  })
+
+  it('rejects an image upload with 415 images_disabled and stores nothing', async () => {
+    for (const [bytes, mime] of [[JPEG, 'image/jpeg'], [PNG, 'image/png'], [WEBP, 'image/webp']] as const) {
+      const r = await send(woman.token, c, bytes, { mime })
+      assert.equal(r.status, 415)
+      assert.equal(((await r.json()) as any).error, 'images_disabled')
+    }
+    const files = await readdir(path.join(dir2, 'up', 'chat')).catch(() => [] as string[])
+    assert.equal(files.length, 0)
+  })
+
+  it('still accepts voice clips from either participant', async () => {
+    for (const who of [man, woman]) {
+      const r = await send(who.token, c, WEBM, { mime: 'audio/webm', durationMs: '3000' })
+      assert.equal(r.status, 201)
+      const msg = (await r.json()) as any
+      assert.equal(msg.kind, 'voice')
+      assert.equal(msg.attachmentDurationMs, 3000)
+    }
   })
 })

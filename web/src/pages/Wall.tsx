@@ -1,42 +1,73 @@
-import { Link } from 'react-router-dom'
-import { useActMutation, useWallQuery } from '../api'
+import { Link, Navigate } from 'react-router-dom'
+import { useMeQuery, useSkipMutation, useWallQuery } from '../api'
 import SafetyMenu from '../features/safety/SafetyMenu'
+import { plural } from '../format'
+import { btnPrimary, btnSecondary, card, chip, eyebrow } from '../ui'
+import Monogram from '../components/Monogram'
+import RealPerson from '../components/Badge'
+import CreditsChip from '../components/CreditsChip'
+import { Wordmark } from '../components/icons'
+import { EmptyState, ErrorState, Loading } from '../components/State'
 
+/** The community for men: one member at a time. Women are sent to their requests. */
 export default function Wall() {
-  const { data, isLoading, isError, refetch } = useWallQuery()
-  const [act, { data: result, isLoading: acting }] = useActMutation()
-  if (isLoading) return <p className="text-stone-500">Loading…</p>
-  if (isError) return <p>Couldn't load profiles. <button className="underline" onClick={refetch}>Retry</button></p>
+  const { data: me } = useMeQuery()
+  const man = me?.gender === 'man'
+  const { data, isLoading, isError, refetch } = useWallQuery(undefined, { skip: !man })
+  const [skip, { isLoading: skipping, isError: skipFailed }] = useSkipMutation()
+  if (me?.gender === 'woman') return <Navigate to="/requests" replace />
+  if (!me || isLoading) return <Loading />
+
+  const credits = me.requestCredits
   const p = data?.[0]
   return (
-    <div className="flex flex-col gap-4">
-      {result?.matched && (
-        <div role="status" className="rounded-md bg-emerald-100 p-3 text-emerald-900">
-          It's a match! <Link className="underline" to={`/connections/${result.connectionId}`}>Say hi</Link>
-        </div>
-      )}
-      {!p ? (
-        <p className="text-stone-500">You're all caught up. Check back soon.</p>
-      ) : (
-        <article className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-2">
-            <h2 className="text-xl font-semibold">{p.name}, {p.age}</h2>
-            <SafetyMenu bumpId={p.bumpId} />
-          </div>
-          {p.bio && <p className="mt-2 text-stone-700">{p.bio}</p>}
-          {p.interests.length > 0 && (
-            <ul className="mt-3 flex flex-wrap gap-2">
-              {p.interests.map((i) => <li key={i} className="rounded-full bg-stone-100 px-3 py-1 text-sm">{i}</li>)}
-            </ul>
-          )}
-          <div className="mt-5 flex gap-3">
-            <button disabled={acting} onClick={() => act({ bumpId: p.bumpId, action: 'skip' })}
-              className="flex-1 rounded-md border border-stone-300 px-3 py-2 disabled:opacity-50">Skip</button>
-            <button disabled={acting} onClick={() => act({ bumpId: p.bumpId, action: 'like' })}
-              className="flex-1 rounded-md bg-stone-900 px-3 py-2 text-white disabled:opacity-50">Like</button>
-          </div>
-        </article>
-      )}
+    <div className="flex flex-1 flex-col gap-3">
+      <div className="flex h-12 items-center justify-between md:hidden">
+        <Wordmark />
+        <CreditsChip credits={credits} />
+      </div>
+      <h1 className="sr-only">Community</h1>
+      {isError ? <ErrorState what="the community" onRetry={refetch} />
+        : !p ? (
+          <EmptyState title="You're all caught up">
+            <p>You've met everyone who fits right now. New members join as they're checked, so it's worth a look again soon.</p>
+            <p>Nothing is lost while you wait.</p>
+          </EmptyState>
+        ) : (
+          <>
+            <article aria-label={`${p.name}, ${p.age}`} className={`${card} flex flex-col gap-4 rounded-[28px]`}>
+              <div className="flex items-start gap-4">
+                <Monogram name={p.name} size={92} />
+                <div className="flex min-w-0 flex-1 flex-col gap-2 pt-1">
+                  <h2 className="font-display text-[26px] font-semibold leading-tight">{p.name}, {p.age}</h2>
+                  <RealPerson variant="pill" />
+                </div>
+                <SafetyMenu bumpId={p.bumpId} />
+              </div>
+              {p.bio && (
+                <section className="flex flex-col gap-1">
+                  <h3 className={eyebrow}>About me</h3>
+                  <p className="whitespace-pre-wrap break-words text-[15px] leading-normal">{p.bio}</p>
+                </section>
+              )}
+              {p.interests.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <h3 className={eyebrow}>Interests</h3>
+                  <ul className="flex flex-wrap gap-2">{p.interests.map((i) => <li key={i} className={chip}>{i}</li>)}</ul>
+                </section>
+              )}
+              <p className="text-[13px] leading-snug text-slate">No photos here. Members get to know each other by what they share.</p>
+            </article>
+            {skipFailed && <p role="alert" className="text-sm text-ember-deep">Couldn't do that. Please try again.</p>}
+            <div className="flex gap-3">
+              <button type="button" disabled={skipping} onClick={() => skip({ bumpId: p.bumpId })} className={`${btnSecondary} h-[52px] flex-1`}>Not now</button>
+              <Link to={`/request/${p.bumpId}`} className={`${btnPrimary} h-[52px] flex-[1.4] text-base`}>Send request</Link>
+            </div>
+            <p className="text-center text-[13px] text-slate">
+              {credits > 0 ? `Uses 1 of your ${plural(credits, 'request')}` : "You're out of requests. You can get more next."}
+            </p>
+          </>
+        )}
     </div>
   )
 }

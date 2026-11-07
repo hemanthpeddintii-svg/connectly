@@ -14,7 +14,7 @@ import { GRACE_MS } from '../features/account.ts'
 export type PurgeResult = { due: number; purged: number; failed: number; filesRemoved: number }
 
 // Tables created by other features. Matched by name so the script works whichever of them exist.
-const RELATED_TABLE = /block|report|preference|push/
+const RELATED_TABLE = /block|report|preference|push|request/
 // Moderator columns point at the *reviewing* admin; those rows belong to someone else and stay.
 const REVIEWER_COLUMNS = new Set(['reviewed_by', 'resolved_by', 'decided_by', 'handled_by'])
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/

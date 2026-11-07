@@ -95,6 +95,8 @@ export async function attachmentRoutes(app: FastifyInstance) {
     const type = image ?? audio
     if (!type) return reply.code(415).send({ error: 'unsupported_type' })
     const kind = image ? 'image' : 'voice'
+    // Members have no photos in this community; image messages stay off unless ALLOW_CHAT_IMAGES=true.
+    if (kind === 'image' && process.env.ALLOW_CHAT_IMAGES !== 'true') return reply.code(415).send({ error: 'images_disabled' })
 
     let durationMs: number | null = null
     if (kind === 'voice') {

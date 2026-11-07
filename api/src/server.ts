@@ -13,6 +13,7 @@ import { authRoutes } from './auth.ts'
 import { DUMMY_HASH, clearFailures, lockRemainingMs, passwordSchema, rateLimit, recordFailure, securityHeaders } from './security.ts'
 import { verificationRoutes } from './verification.ts'
 import { paymentRoutes } from './payments.ts'
+import { requestRoutes } from './requests.ts'
 import { featureRoutes } from './features/index.ts'
 import {
   actionGuards, checkMessageAllowed, composeFilters, connectionFilters, errorStatus, notifyMessage, pushToUser, sockets, wallFilters,
@@ -46,6 +47,7 @@ await app.register(authRoutes)
 await app.register(verificationRoutes)
 await app.register(paymentRoutes)
 await app.register(featureRoutes)
+await app.register(requestRoutes)
 
 // Accounts listed in ADMIN_EMAILS are admins and skip verification.
 for (const email of adminEmails) {
@@ -59,6 +61,7 @@ const sign = (u: UserRow) => app.jwt.sign({ sub: u.id, tv: u.token_version }, { 
 const signupSchema = z.object({
   email: z.string().email().max(254),
   password: passwordSchema,
+  gender: z.enum(['man', 'woman']),
   name: z.string().trim().min(1).max(60),
   age: z.number().int().min(18).max(120),
   bio: z.string().max(500).default(''),
@@ -76,9 +79,9 @@ app.post('/v0/signup', rateLimit(10, '1 hour'), async (req, reply) => {
   const id = newId()
   const isAdmin = adminEmails.has(email)
   db.prepare(
-    'INSERT INTO users (id,bump_id,email,password_hash,name,age,bio,interests,status,role,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO users (id,bump_id,email,password_hash,name,age,bio,interests,gender,status,role,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
   ).run(
-    id, newBumpId(), email, hashPassword(d.password), d.name, d.age, d.bio, JSON.stringify(d.interests),
+    id, newBumpId(), email, hashPassword(d.password), d.name, d.age, d.bio, JSON.stringify(d.interests), d.gender,
     isAdmin ? 'active' : 'unverified', isAdmin ? 'admin' : 'user', Date.now(),
   )
   const user = getUser(id)!
@@ -118,10 +121,14 @@ app.patch('/v0/me', authed, async (req, reply) => {
     name: z.string().trim().min(1).max(60).optional(),
     bio: z.string().max(500).optional(),
     interests: z.array(z.string().trim().min(1).max(30)).max(12).optional(),
+    gender: z.enum(['man', 'woman']).optional(),
   }).safeParse(req.body)
   if (!body.success) return reply.code(400).send({ error: 'invalid_input' })
   const u = getUser(req.user.sub)
   if (!u) return reply.code(401).send({ error: 'unauthorized' })
+  // Gender decides which side of a request a member is on, so it can be set once (accounts that predate it) and never switched.
+  if (body.data.gender && u.gender && body.data.gender !== u.gender) return reply.code(409).send({ error: 'gender_locked' })
+  if (body.data.gender && !u.gender) db.prepare('UPDATE users SET gender = ? WHERE id = ?').run(body.data.gender, u.id)
   db.prepare('UPDATE users SET name=?, bio=?, interests=? WHERE id=?').run(
     body.data.name ?? u.name,
     body.data.bio ?? u.bio,
@@ -132,60 +139,40 @@ app.patch('/v0/me', authed, async (req, reply) => {
 })
 
 // ---- wall & actions -----------------------------------------------------
-app.get('/v0/profiles', active, async (req) => {
+app.get('/v0/profiles', active, async (req, reply) => {
+  // Only men browse; they see women who haven't been answered yet.
+  if (getUser(req.user.sub)?.gender !== 'man') return reply.code(403).send({ error: 'not_applicable' })
   const limit = Math.min(Number((req.query as any).limit) || 20, 50)
   const extra = composeFilters(wallFilters, req.user.sub)
   const rows = db.prepare(`
     SELECT * FROM users u
-    WHERE u.id != ? AND u.status = 'active'
-      AND NOT EXISTS (SELECT 1 FROM actions a WHERE a.from_id = ? AND a.to_id = u.id)${extra.sql}
-    ORDER BY u.created_at DESC LIMIT ?`).all(req.user.sub, req.user.sub, ...extra.params, limit) as UserRow[]
+    WHERE u.id != ? AND u.status = 'active' AND u.gender = 'woman'
+      AND NOT EXISTS (SELECT 1 FROM actions a WHERE a.from_id = ? AND a.to_id = u.id)
+      AND NOT EXISTS (SELECT 1 FROM requests r WHERE r.from_id = ? AND r.to_id = u.id)${extra.sql}
+    ORDER BY u.created_at DESC LIMIT ?`).all(req.user.sub, req.user.sub, req.user.sub, ...extra.params, limit) as UserRow[]
   return rows.map(publicProfile)
 })
 
-const connectionIdFor = (x: string, y: string) => {
-  const [a, b] = x < y ? [x, y] : [y, x]
-  return (db.prepare('SELECT id FROM connections WHERE a_id=? AND b_id=?').get(a, b) as { id: string } | undefined)?.id
-}
-
+// "Not now" on a community card hides that member from the viewer's list. Introductions go through /v0/requests.
 app.post('/v0/actions', active, async (req, reply) => {
-  const body = z.object({ bumpId: z.string(), action: z.enum(['like', 'skip']) }).safeParse(req.body)
+  const body = z.object({ bumpId: z.string(), action: z.literal('skip') }).safeParse(req.body)
   if (!body.success) return reply.code(400).send({ error: 'invalid_input' })
   const target = db.prepare('SELECT * FROM users WHERE bump_id = ?').get(body.data.bumpId) as UserRow | undefined
   if (!target || target.id === req.user.sub || target.status !== 'active') return reply.code(404).send({ error: 'not_found' })
-  for (const guard of actionGuards) {
-    const refused = guard(req.user.sub, target)
-    if (refused) return reply.code(errorStatus(refused)).send({ error: refused })
-  }
   db.prepare(
-    'INSERT INTO actions (from_id,to_id,action,created_at) VALUES (?,?,?,?) ON CONFLICT(from_id,to_id) DO UPDATE SET action=excluded.action, created_at=excluded.created_at',
-  ).run(req.user.sub, target.id, body.data.action, Date.now())
-
-  let matched = false
-  let connectionId: string | undefined
-  if (body.data.action === 'like') {
-    const theyLiked = db.prepare("SELECT 1 FROM actions WHERE from_id=? AND to_id=? AND action='like'").get(target.id, req.user.sub)
-    if (theyLiked) {
-      matched = true
-      connectionId = connectionIdFor(req.user.sub, target.id)
-      if (!connectionId) {
-        connectionId = newId()
-        const [a, b] = req.user.sub < target.id ? [req.user.sub, target.id] : [target.id, req.user.sub]
-        db.prepare('INSERT INTO connections (id,a_id,b_id,created_at) VALUES (?,?,?,?)').run(connectionId, a, b, Date.now())
-      }
-    }
-  }
-  return { matched, connectionId }
+    "INSERT INTO actions (from_id,to_id,action,created_at) VALUES (?,?,'skip',?) ON CONFLICT(from_id,to_id) DO UPDATE SET action='skip', created_at=excluded.created_at",
+  ).run(req.user.sub, target.id, Date.now())
+  return {}
 })
 
 // ---- connections & chat -------------------------------------------------
 app.get('/v0/connections', active, async (req) => {
   const extra = composeFilters(connectionFilters, req.user.sub)
   const rows = db.prepare(`
-    SELECT c.id, c.created_at, u.* FROM connections c
+    SELECT c.id AS connection_id, c.created_at AS connected_at, u.* FROM connections c
     JOIN users u ON u.id = CASE WHEN c.a_id = ? THEN c.b_id ELSE c.a_id END
     WHERE (c.a_id = ? OR c.b_id = ?)${extra.sql} ORDER BY c.created_at DESC`).all(req.user.sub, req.user.sub, req.user.sub, ...extra.params) as any[]
-  return rows.map((r) => ({ id: r.id, createdAt: r.created_at, profile: publicProfile(r) }))
+  return rows.map((r) => ({ id: r.connection_id as string, createdAt: r.connected_at as number, profile: publicProfile(r) }))
 })
 
 const isMember = (connId: string, userId: string) =>
@@ -211,7 +198,7 @@ app.post('/v0/connections/:id/messages', active, async (req, reply) => {
   if (!body.success) return reply.code(400).send({ error: 'invalid_input' })
   const c = isMember(id, req.user.sub)
   if (!c || (c.a_id !== req.user.sub && c.b_id !== req.user.sub)) return reply.code(404).send({ error: 'not_found' })
-  // Matching and reading are free; sending needs a membership and passing every registered guard.
+  // Chat is free once a request is accepted; sending still has to pass every registered guard (blocks, suspensions, deactivation).
   const other = c.a_id === req.user.sub ? c.b_id : c.a_id
   const refused = checkMessageAllowed(getUser(req.user.sub)!, other)
   if (refused) return reply.code(errorStatus(refused)).send({ error: refused })

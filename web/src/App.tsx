@@ -1,11 +1,18 @@
 import { useEffect } from 'react'
-import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { api, authSlice, useMeQuery } from './api'
 import type { RootState } from './store'
 import { useRealtime } from './realtime'
+import { TabBar, TopBar } from './components/Nav'
+import { Loading } from './components/State'
 import Auth from './pages/Auth'
+import GenderChooser from './pages/GenderChooser'
 import Wall from './pages/Wall'
+import SendRequest from './pages/SendRequest'
+import Requests from './pages/Requests'
+import Accepted from './pages/Accepted'
+import Sent from './pages/Sent'
 import Connections from './pages/Connections'
 import Chat from './pages/Chat'
 import Profile from './pages/Profile'
@@ -15,13 +22,16 @@ import Membership from './pages/Membership'
 import Settings from './pages/Settings'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
-import { unsubscribeThisDevice } from './features/push/unsubscribe'
+
+// Screens that take over the page: no tab bar, and the chat and "Come in" screens also skip the page padding.
+const noTabs = /^\/(request|accepted|membership)(\/|$)|^\/connections\/[^/]+/
+const flush = /^\/(accepted|connections\/[^/]+)/
 
 function Shell() {
   const token = useSelector((s: RootState) => s.auth.token)
   const dispatch = useDispatch()
   const { pathname } = useLocation()
-  const { data: me, error } = useMeQuery(undefined, { skip: !token })
+  const { data: me, error, refetch } = useMeQuery(undefined, { skip: !token })
   useRealtime()
 
   // An expired or revoked token comes back as 401, and a purged account reports 'deleted': drop the session.
@@ -33,38 +43,25 @@ function Shell() {
   }, [error, me?.status, dispatch])
 
   if (!token) return <Navigate to="/login" replace />
-  if (!me) return <p className="p-6 text-stone-500">Loading…</p>
+  if (!me) {
+    return error
+      ? <p role="alert" className="p-6 text-slate">Couldn't load your account. <button className="underline" onClick={refetch}>Try again</button></p>
+      : <Loading />
+  }
+  if (me.gender === null) return <GenderChooser />
 
-  const active = me.status === 'active'
-  // Unverified members can only reach the verification and profile pages.
-  if (!active && pathname !== '/verify' && pathname !== '/me' && pathname !== '/settings') return <Navigate to="/verify" replace />
+  // Unverified members can only reach the verification, profile and settings pages.
+  if (me.status !== 'active' && pathname !== '/verify' && pathname !== '/me' && pathname !== '/settings') return <Navigate to="/verify" replace />
 
-  const tab = ({ isActive }: { isActive: boolean }) =>
-    `px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-200'}`
+  const tabs = !noTabs.test(pathname)
+  const bare = pathname.startsWith('/accepted')
   return (
-    <div className="mx-auto flex min-h-dvh max-w-2xl flex-col">
-      <header className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
-        <span className="text-lg font-semibold">Connectly</span>
-        <nav className="flex gap-1">
-          {active ? (
-            <>
-              <NavLink to="/wall" className={tab}>Wall</NavLink>
-              <NavLink to="/connections" className={tab}>Connections</NavLink>
-              <NavLink to="/membership" className={tab}>Membership</NavLink>
-            </>
-          ) : (
-            <NavLink to="/verify" className={tab}>Verify</NavLink>
-          )}
-          <NavLink to="/me" className={tab}>Me</NavLink>
-          <NavLink to="/settings" className={tab}>Settings</NavLink>
-          {me.role === 'admin' && <NavLink to="/admin" className={tab}>Admin</NavLink>}
-        </nav>
-        <button
-          className="text-sm text-stone-500 hover:text-stone-900"
-          onClick={() => { void unsubscribeThisDevice(token); dispatch(authSlice.actions.setToken(null)); dispatch(api.util.resetApiState()) }}
-        >Log out</button>
-      </header>
-      <main className="flex-1 p-4"><Outlet /></main>
+    <div className="flex min-h-dvh flex-col">
+      {!bare && <div className="mx-auto w-full max-w-2xl"><TopBar /></div>}
+      <main className={`mx-auto flex w-full max-w-2xl flex-1 flex-col ${flush.test(pathname) ? '' : 'px-5 pt-4'} ${tabs ? 'pb-24 md:pb-10' : ''}`}>
+        <Outlet />
+      </main>
+      {tabs && <TabBar />}
     </div>
   )
 }
@@ -79,6 +76,10 @@ export default function App() {
       <Route element={<Shell />}>
         <Route path="/verify" element={<Verify />} />
         <Route path="/wall" element={<Wall />} />
+        <Route path="/request/:bumpId" element={<SendRequest />} />
+        <Route path="/requests" element={<Requests />} />
+        <Route path="/accepted/:connectionId" element={<Accepted />} />
+        <Route path="/sent" element={<Sent />} />
         <Route path="/connections" element={<Connections />} />
         <Route path="/connections/:id" element={<Chat />} />
         <Route path="/membership" element={<Membership />} />

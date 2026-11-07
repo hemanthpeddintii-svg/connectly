@@ -1,7 +1,5 @@
 import { api, type Message } from '../../api'
 
-export type AttachmentQuota = { imagesRemaining: number; resetsAt: number | null }
-
 export const attachmentsApi = api.injectEndpoints({
   endpoints: (b) => ({
     sendAttachment: b.mutation<Message, { connectionId: string; file: Blob; filename: string; durationMs?: number }>({
@@ -13,12 +11,7 @@ export const attachmentsApi = api.injectEndpoints({
       },
       invalidatesTags: (_r, _e, a) => [{ type: 'Messages', id: a.connectionId }],
     }),
-    attachmentQuota: b.query<AttachmentQuota, string>({
-      query: (connectionId) => `connections/${connectionId}/attachments/quota`,
-      // Refetched together with the message list, so it follows every photo sent or received.
-      providesTags: (_r, _e, id) => [{ type: 'Messages', id }],
-    }),
   }),
 })
 
-export const { useSendAttachmentMutation, useAttachmentQuotaQuery } = attachmentsApi
+export const { useSendAttachmentMutation } = attachmentsApi

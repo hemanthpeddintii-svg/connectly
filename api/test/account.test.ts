@@ -29,16 +29,17 @@ async function call(method: string, url: string, opts: { token?: string; json?: 
   return fetch(BASE + url, { method, headers, body })
 }
 
-type User = { token: string; bumpId: string; id: string; email: string }
+type Gender = 'man' | 'woman'
+type User = { token: string; bumpId: string; id: string; email: string; gender: Gender }
 let counter = 0
 
-async function signup(name: string): Promise<User> {
+async function signup(name: string, gender: Gender = 'woman'): Promise<User> {
   const email = `acct${++counter}-${Math.random().toString(36).slice(2, 8)}@x.test`
-  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30 } })
+  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
   assert.equal(r.status, 200)
   const j = (await r.json()) as { token: string; user: { bumpId: string } }
   const row = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as { id: string }
-  return { token: j.token, bumpId: j.user.bumpId, id: row.id, email }
+  return { token: j.token, bumpId: j.user.bumpId, id: row.id, email, gender }
 }
 
 const form = (parts: Record<string, [Buffer, string]>) => {
@@ -47,23 +48,30 @@ const form = (parts: Record<string, [Buffer, string]>) => {
   return f
 }
 
-/** Verified member with a live membership (so they may chat). */
-async function member(name: string): Promise<User> {
-  const u = await signup(name)
+/** Verified member (default: a woman, who appears on the wall; pass 'man' for someone who browses it). */
+async function member(name: string, gender: Gender = 'woman'): Promise<User> {
+  const u = await signup(name, gender)
   assert.equal((await call('POST', '/verification', { token: u.token, form: form({ selfie: [JPEG, 'image/jpeg'], voice: [WEBM, 'audio/webm'] }) })).status, 201)
   const login = await (await call('POST', '/login', { json: { email: 'admin@x.test', password: 'Tr0ub4dor&3xKq' } })).json() as any
   const list = (await (await call('GET', '/admin/verifications', { token: login.token })).json()) as any[]
   const item = list.find((x) => x.user.bumpId === u.bumpId)
   assert.equal((await call('POST', `/admin/verifications/${item.id}/decision`, { token: login.token, json: { decision: 'approve' } })).status, 200)
-  db.prepare('UPDATE users SET membership_expires_at = ? WHERE id = ?').run(Date.now() + 30 * DAY, u.id)
   return u
 }
 
+/** Connects a man and a woman (in either argument order) through the request flow. */
 async function connect(a: User, b: User): Promise<string> {
-  await call('POST', '/actions', { token: a.token, json: { bumpId: b.bumpId, action: 'like' } })
-  const r = await call('POST', '/actions', { token: b.token, json: { bumpId: a.bumpId, action: 'like' } })
-  const j = (await r.json()) as { matched: boolean; connectionId: string }
-  assert.equal(j.matched, true)
+  const [man, woman] = a.gender === 'man' ? [a, b] : [b, a]
+  assert.equal(man.gender, 'man')
+  assert.equal(woman.gender, 'woman')
+  db.prepare('UPDATE users SET request_credits = ? WHERE email = ?').run(5, man.email)
+  let r = await call('POST', '/requests', { token: man.token, json: { bumpId: woman.bumpId, note: 'hi' } })
+  assert.equal(r.status, 201)
+  const { id } = (await r.json()) as { id: string }
+  r = await call('POST', `/requests/${id}/decision`, { token: woman.token, json: { decision: 'accept' } })
+  assert.equal(r.status, 200)
+  const j = (await r.json()) as { status: string; connectionId: string }
+  assert.equal(j.status, 'accepted')
   return j.connectionId
 }
 
@@ -88,7 +96,7 @@ before(async () => {
   db = (await import('../src/db.ts')).db
   db.exec('PRAGMA busy_timeout = 5000')
   purge = (await import('../src/scripts/purge-deleted-accounts.ts')).purgeDueAccounts
-  const r = await call('POST', '/signup', { json: { email: 'admin@x.test', password: 'Tr0ub4dor&3xKq', name: 'Admin', age: 40 } })
+  const r = await call('POST', '/signup', { json: { email: 'admin@x.test', password: 'Tr0ub4dor&3xKq', name: 'Admin', age: 40, gender: 'man' } })
   assert.equal(r.status, 200)
 })
 
@@ -135,8 +143,8 @@ describe('quiet mode', () => {
 
   it('hides the member from other walls only, and is idempotent', async () => {
     const quiet = await member('Quiet')
-    const other = await member('Other')
-    const friend = await member('Friend')
+    const other = await member('Other', 'man')
+    const friend = await member('Friend', 'man')
     const connId = await connect(quiet, friend)
     assert.ok((await wallNames(other)).includes(quiet.bumpId))
 
@@ -148,7 +156,7 @@ describe('quiet mode', () => {
     assert.equal(s.deactivated, false)
 
     assert.ok(!(await wallNames(other)).includes(quiet.bumpId), 'hidden from wall')
-    assert.ok((await wallNames(quiet)).includes(other.bumpId), 'can still browse')
+    assert.equal((await call('GET', '/me', { token: quiet.token })).status, 200, 'can still use the app')
     assert.ok((await connectionIds(friend)).includes(quiet.bumpId), 'connections unaffected')
     assert.equal((await send(quiet, connId)).status, 200, 'can chat')
     assert.equal((await send(friend, connId)).status, 200, 'can be chatted with')
@@ -164,7 +172,7 @@ describe('quiet mode', () => {
 
   it('without hours lasts until turned off', async () => {
     const quiet = await member('Forever')
-    const other = await member('Watcher')
+    const other = await member('Watcher', 'man')
     const s = await (await call('POST', '/account/quiet-mode', { token: quiet.token })).json() as any
     assert.equal(s.quietUntil, 8_640_000_000_000_000)
     assert.ok(!(await wallNames(other)).includes(quiet.bumpId))
@@ -174,7 +182,7 @@ describe('quiet mode', () => {
 
   it('expires on read without any timer', async () => {
     const quiet = await member('Expiring')
-    const other = await member('Watcher2')
+    const other = await member('Watcher2', 'man')
     await call('POST', '/account/quiet-mode', { token: quiet.token, json: { hours: 1 } })
     assert.ok(!(await wallNames(other)).includes(quiet.bumpId))
     db.prepare('UPDATE account_state SET quiet_until = ? WHERE user_id = ?').run(Date.now() - 1000, quiet.id)
@@ -182,26 +190,32 @@ describe('quiet mode', () => {
     assert.ok((await wallNames(other)).includes(quiet.bumpId))
   })
 
-  it('refuses likes and skips aimed at a quiet member, but not from one', async () => {
+  it('refuses requests aimed at a quiet member, but she can still decide the ones she already has', async () => {
     const quiet = await member('QuietTarget')
-    const other = await member('Liker')
+    const other = await member('Liker', 'man')
+    const earlier = await member('EarlierAsker', 'man')
+    db.prepare('UPDATE users SET request_credits = 5 WHERE email IN (?, ?)').run(other.email, earlier.email)
+    const sent = await call('POST', '/requests', { token: earlier.token, json: { bumpId: quiet.bumpId, note: 'hi' } })
+    assert.equal(sent.status, 201)
     await call('POST', '/account/quiet-mode', { token: quiet.token, json: { hours: 5 } })
-    for (const action of ['like', 'skip']) {
-      const r = await call('POST', '/actions', { token: other.token, json: { bumpId: quiet.bumpId, action } })
-      assert.equal(r.status, 404)
-      assert.equal(((await r.json()) as any).error, 'not_found')
-    }
-    assert.equal((await call('POST', '/actions', { token: quiet.token, json: { bumpId: other.bumpId, action: 'like' } })).status, 200)
+    const r = await call('POST', '/requests', { token: other.token, json: { bumpId: quiet.bumpId, note: 'hi' } })
+    assert.equal(r.status, 404)
+    assert.equal(((await r.json()) as any).error, 'not_found')
+    assert.equal((db.prepare('SELECT request_credits AS c FROM users WHERE id = ?').get(other.id) as any).c, 5, 'no credit spent')
+    const id = ((await sent.json()) as any).id
+    assert.equal((await call('POST', `/requests/${id}/decision`, { token: quiet.token, json: { decision: 'decline' } })).status, 200)
   })
 })
 
 describe('deactivation', () => {
-  it('hides from wall and connections and blocks likes and messages in both directions', async () => {
+  it('hides from wall and connections and blocks requests and messages in both directions', async () => {
     const gone = await member('Gone')
-    const friend = await member('Friend2')
-    const stranger = await member('Stranger')
+    const friend = await member('Friend2', 'man')
+    const stranger = await member('Stranger', 'man')
     const connId = await connect(gone, friend)
     assert.ok((await connectionIds(friend)).includes(gone.bumpId))
+    db.prepare('UPDATE users SET request_credits = 5 WHERE email = ?').run(stranger.email)
+    const pending = (await (await call('POST', '/requests', { token: stranger.token, json: { bumpId: gone.bumpId, note: 'hi' } })).json()) as any
 
     assert.equal((await call('POST', '/account/deactivate', { token: gone.token })).status, 200)
     const first = await account(gone)
@@ -212,13 +226,13 @@ describe('deactivation', () => {
     assert.ok(!(await wallNames(stranger)).includes(gone.bumpId))
     assert.ok(!(await connectionIds(friend)).includes(gone.bumpId))
 
-    let r = await call('POST', '/actions', { token: gone.token, json: { bumpId: stranger.bumpId, action: 'like' } })
+    let r = await call('POST', `/requests/${pending.id}/decision`, { token: gone.token, json: { decision: 'accept' } })
     assert.equal(r.status, 403)
     assert.equal(((await r.json()) as any).error, 'account_deactivated')
     r = await send(gone, connId)
     assert.equal(r.status, 403)
     assert.equal(((await r.json()) as any).error, 'account_deactivated')
-    r = await call('POST', '/actions', { token: stranger.token, json: { bumpId: gone.bumpId, action: 'like' } })
+    r = await call('POST', '/requests', { token: friend.token, json: { bumpId: gone.bumpId, note: 'hi' } })
     assert.equal(r.status, 404)
     r = await send(friend, connId)
     assert.equal(r.status, 404)
@@ -227,12 +241,12 @@ describe('deactivation', () => {
     // Still able to log in, read their data and see their own history.
     assert.equal((await call('GET', '/me', { token: gone.token })).status, 200)
     assert.equal((await call('GET', `/connections/${connId}/messages`, { token: gone.token })).status, 200)
-    assert.ok((await wallNames(gone)).includes(stranger.bumpId))
+    assert.equal((await call('GET', '/requests/received', { token: gone.token })).status, 200)
   })
 
   it('reactivation restores everything and is idempotent', async () => {
     const u = await member('Back')
-    const friend = await member('Friend3')
+    const friend = await member('Friend3', 'man')
     const connId = await connect(u, friend)
     await call('POST', '/account/deactivate', { token: u.token })
     for (let i = 0; i < 2; i++) {
@@ -240,7 +254,7 @@ describe('deactivation', () => {
       assert.equal(r.status, 200)
       assert.equal(((await r.json()) as any).deactivated, false)
     }
-    assert.ok((await wallNames(await member('Newcomer'))).includes(u.bumpId))
+    assert.ok((await wallNames(await member('Newcomer', 'man'))).includes(u.bumpId))
     assert.ok((await connectionIds(friend)).includes(u.bumpId))
     assert.equal((await send(u, connId)).status, 200)
   })
@@ -256,7 +270,7 @@ describe('delete request', () => {
 
   it('starts a 30-day grace period, deactivates, and never deletes over HTTP', async () => {
     const u = await member('Leaving')
-    const other = await member('Stays')
+    const other = await member('Stays', 'man')
     const before = Date.now()
     const r = await call('POST', '/account/delete-request', { token: u.token, json: { reason: '  moving on  ' } })
     assert.equal(r.status, 200)
@@ -285,7 +299,7 @@ describe('delete request', () => {
 
   it('cancel clears the request and reactivates only a request-made deactivation', async () => {
     const u = await member('Cancels')
-    const other = await member('Sees')
+    const other = await member('Sees', 'man')
     await call('POST', '/account/delete-request', { token: u.token, json: {} })
     for (let i = 0; i < 2; i++) {
       const r = await call('DELETE', '/account/delete-request', { token: u.token })
@@ -314,15 +328,16 @@ describe('purge-deleted-accounts', () => {
   }
 
   it('anonymises only accounts past the grace period and honours --dry-run', async () => {
-    const due = await member('DueMember')
+    const due = await member('DueMember', 'man')
     const notDue = await member('NotDue')
     const friend = await member('Chatter')
     const connId = await connect(due, friend)
     assert.equal((await send(friend, connId)).status, 200)
+    db.prepare('INSERT INTO actions (from_id,to_id,action,created_at) VALUES (?,?,?,?)').run(friend.id, due.id, 'skip', Date.now())
     assert.equal((await call('POST', '/account/quiet-mode', { token: due.token })).status, 200)
 
     // Files: verification selfie/voice (from signup), a payment proof, a message attachment.
-    const pf = form({ proof: [PNG, 'image/png'] }); pf.set('planId', 'monthly'); pf.set('reference', `UTR${Date.now()}`)
+    const pf = form({ proof: [PNG, 'image/png'] }); pf.set('planId', 'pack10'); pf.set('reference', `UTR${Date.now()}`)
     assert.equal((await call('POST', '/payments', { token: due.token, form: pf })).status, 201)
     const attach = `${crypto.randomUUID()}.png`
     await writeFile(upFile(attach), PNG)
@@ -369,7 +384,6 @@ describe('purge-deleted-accounts', () => {
     assert.equal(row.bio, '')
     assert.equal(row.interests, '[]')
     assert.equal(row.status, 'deleted')
-    assert.equal(row.membership_expires_at, null)
     for (const f of owned) assert.ok(!existsSync(upFile(f)), `removed ${f}`)
     assert.ok(existsSync(upFile(notDueFile)), 'other accounts keep their files')
     assert.equal((db.prepare('SELECT name FROM users WHERE id = ?').get(notDue.id) as any).name, 'NotDue')
@@ -381,7 +395,7 @@ describe('purge-deleted-accounts', () => {
     assert.equal((await call('GET', '/account', { token: due.token })).status, 401)
     assert.equal((await call('DELETE', '/account/delete-request', { token: due.token })).status, 401)
     assert.equal((await call('POST', '/verification', { token: due.token, form: form({ selfie: [JPEG, 'image/jpeg'], voice: [WEBM, 'audio/webm'] }) })).status, 401)
-    assert.ok(!(await wallNames(friend)).includes(due.bumpId))
+    assert.ok(!(await connectionIds(friend)).includes(due.bumpId))
 
     // Referential integrity: rows kept, content gone, other tables cleaned.
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), [])
@@ -392,6 +406,7 @@ describe('purge-deleted-accounts', () => {
     const theirs = db.prepare('SELECT body FROM messages WHERE sender_id = ?').all(friend.id) as any[]
     assert.ok(theirs.some((m) => m.body === 'hello'), "other member's messages untouched")
     assert.equal((db.prepare('SELECT COUNT(*) AS n FROM actions WHERE from_id = ? OR to_id = ?').get(due.id, due.id) as any).n, 0)
+    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM requests WHERE from_id = ? OR to_id = ?').get(due.id, due.id) as any).n, 0, 'request rows removed')
     assert.deepEqual(db.prepare('SELECT blocker_id, blocked_id FROM test_blocklist').all().map((r: any) => [r.blocker_id, r.blocked_id]), [[friend.id, notDue.id]])
     assert.deepEqual(db.prepare('SELECT id FROM test_reports ORDER BY id').all().map((r: any) => r.id), ['r2'], 'rows reviewed by the member belong to the reporter')
     assert.deepEqual(db.prepare('SELECT user_id FROM test_push_subs').all().map((r: any) => r.user_id), [friend.id])

@@ -19,7 +19,7 @@ function PaymentCase({ p }: { p: AdminPayment }) {
   return (
     <article className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-4">
       <header>
-        <h3 className="font-semibold">{p.user.name} · {inr(p.amountPaise)} <span className="font-normal text-stone-500">({p.days} days)</span></h3>
+        <h3 className="font-semibold">{p.user.name} · {inr(p.amountPaise)} <span className="font-normal text-stone-500">({p.requests} requests)</span></h3>
         <p className="text-sm text-stone-500">{p.user.email} · ID {p.user.bumpId} · {dateTime(p.createdAt)}</p>
         <p className="text-sm">Reference: <code className="select-all">{p.reference}</code></p>
       </header>
@@ -41,7 +41,7 @@ function PaymentCase({ p }: { p: AdminPayment }) {
       ) : (
         <div className="flex gap-2">
           <button disabled={isLoading} onClick={() => run({ id: p.id, decision: 'approve' })}
-            className="rounded-md bg-emerald-700 px-3 py-2 text-sm text-white disabled:opacity-50">Approve {p.days} days</button>
+            className="rounded-md bg-emerald-700 px-3 py-2 text-sm text-white disabled:opacity-50">Add {p.requests} requests</button>
           <button disabled={isLoading} onClick={() => setRejecting(true)}
             className="rounded-md border border-stone-300 px-3 py-2 text-sm disabled:opacity-50">Reject…</button>
         </div>

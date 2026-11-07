@@ -35,9 +35,9 @@ Membership prices in `api/src/plans.ts` are **placeholders**; set your own.
 - **Auth & profiles:** signup/login, profile edit.
 - **Auth hardening:** password policy (8–128 chars, common passwords refused); per-IP rate limits on sign-up, sign-in and reset endpoints; per-account sign-in lockout (5 failures → 15 min, keyed by email+IP so strangers can't lock you out); identical responses and one hash check for unknown emails; revocable sessions (every token carries a version that password change/reset and "sign out of all devices" bump, which also closes live sockets); forgot/reset password with 30-minute single-use links stored hashed; security headers. Email is pluggable: call `setMailer` (api/src/mailer.ts) with your provider; until then links are printed to the server log outside production and dropped in production.
 - **Verification:** new accounts are `unverified` until they upload a selfie and voice clip and an admin approves (admin console at `/admin`). File types are detected from bytes; media is admin-only.
-- **Matching:** wall of unseen verified profiles, like/skip, mutual like creates a connection.
-- **Chat:** 1:1 text, image and voice messages with live WebSocket delivery. Reading is free; sending needs a membership (admins exempt).
-- **Memberships & payments:** members pay out of band and upload a UTR + screenshot; admins approve or reject with a reason; approval adds days and renewals stack. Reused references/screenshots are refused.
+- **Requests (the core flow):** members sign up as a man or a woman. Men browse a community list of verified women (no photos), and send a request with a short note, costing 1 request. Women get a Requests inbox and accept or say not now; accepting opens a chat. One request per pair, ever: a "not now" is final.
+- **Chat:** 1:1 text and voice messages with live WebSocket delivery. Free once a request is accepted. Image messages are off (set ALLOW_CHAT_IMAGES=true to re-enable).
+- **Request packs & payments:** men buy 10 requests for ₹499 or 20 for ₹899 (api/src/plans.ts), paying out of band and uploading a UTR + screenshot; an admin approves or rejects with a reason, and approval adds the requests to the balance. Reused references or screenshots are refused. Women use the community free.
 - **Preferences:** age-range and interest filters on the wall.
 - **Safety:** block (both directions), report with admin review queue, suspensions.
 - **Account:** quiet mode, deactivate, delete with 30-day grace (`npm run purge-deleted -w api [-- --dry-run]` anonymises due accounts; schedule it).

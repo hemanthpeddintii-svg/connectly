@@ -1,10 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Connectly">
-  <defs>
-    <clipPath id="left-ring"><circle cx="212" cy="256" r="84"/></clipPath>
-  </defs>
-  <!-- Full-bleed background and a mark inside the central 80% so the icon survives maskable cropping. -->
-  <rect width="512" height="512" fill="#1c1917"/>
-  <circle cx="300" cy="256" r="84" fill="#f59e0b" clip-path="url(#left-ring)"/>
-  <circle cx="212" cy="256" r="84" fill="none" stroke="#fafaf9" stroke-width="24"/>
-  <circle cx="300" cy="256" r="84" fill="none" stroke="#fafaf9" stroke-width="24"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="App icon"><title>App icon</title><rect width="1024" height="1024" rx="229.07" fill="#10252B"/><g transform="translate(194.56,194.56) scale(2.48)"><path fill="#F6F1E9" d="M36,220V128A92,92 0 0 1 220,128V220H174V128A46,46 0 0 0 82,128V220Z"/><path fill="#F9502C" d="M103,180a25,25 0 1 0 50,0a25,25 0 1 0 -50,0Z"/></g></svg>

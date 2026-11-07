@@ -1,1 +1,51 @@
 @import "tailwindcss";
+
+@theme {
+  --color-stone-50: #F6F1E9;
+  --color-stone-100: #E6EBE7;
+  --color-stone-200: #E3DDD0;
+  --color-stone-300: #CFC8BA;
+  --color-stone-500: #5A6E72;
+  --color-stone-600: #44585D;
+  --color-stone-900: #10252B;
+
+  --color-ink: #10252B;
+  --color-ember: #F9502C;
+  --color-ember-deep: #C2331A;
+  --color-paper: #F6F1E9;
+  --color-mist: #E6EBE7;
+  --color-slate: #44585D;
+  --color-verified: #1F6F62;
+  --color-fog: #B9CBCD;
+
+  --font-display: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+}
+
+/* The knock: two soft pulses, then the door opens. Reduced motion shows the final frame only. */
+@keyframes knock-pulse {
+  0% { opacity: 0; transform: scale(0.9); }
+  40% { opacity: 1; }
+  100% { opacity: 0.35; transform: scale(1); }
+}
+@keyframes come-in {
+  from { opacity: 0; transform: translateX(-28px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .knock-pulse { animation: knock-pulse 480ms ease-out both; }
+  .knock-pulse-late { animation: knock-pulse 480ms ease-out 240ms both; }
+  .come-in { animation: come-in 240ms ease-out 240ms both; }
+}

@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 
 const PORT = 4100 + Math.floor(Math.random() * 800)
 const BASE = `http://127.0.0.1:${PORT}/v0`
@@ -22,8 +23,8 @@ async function call(method: string, url: string, opts: { token?: string; json?: 
   return fetch(BASE + url, { method, headers, body })
 }
 
-async function signup(email: string, name = 'Test') {
-  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30 } })
+async function signup(email: string, name = 'Test', gender: 'man' | 'woman' = 'man') {
+  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
   assert.equal(r.status, 200)
   return (await r.json()) as { token: string; user: { bumpId: string; status: string; role: string } }
 }
@@ -59,7 +60,7 @@ describe('verification flow', () => {
     assert.equal(user.status, 'unverified')
     assert.equal(user.role, 'user')
     for (const [m, u] of [['GET', '/profiles'], ['GET', '/connections'], ['POST', '/actions']] as const) {
-      const r = await call(m, u, { token, json: m === 'POST' ? { bumpId: 'X', action: 'like' } : undefined })
+      const r = await call(m, u, { token, json: m === 'POST' ? { bumpId: 'X', action: 'skip' } : undefined })
       assert.equal(r.status, 403, u)
       assert.equal(((await r.json()) as any).error, 'not_verified')
     }
@@ -86,7 +87,7 @@ describe('verification flow', () => {
     const admin = await signup('admin@x.test', 'Admin')
     assert.equal(admin.user.role, 'admin')
     assert.equal(admin.user.status, 'active')
-    const u = await signup('u3@x.test', 'Una')
+    const u = await signup('u3@x.test', 'Una', 'woman')
 
     // client-supplied filename is ignored (path traversal attempt)
     let r = await call('POST', '/verification', { token: u.token, form: files(JPEG, WEBM, '../../evil.jpg') })
@@ -131,7 +132,7 @@ describe('verification flow', () => {
     me = await (await call('GET', '/me', { token: u.token })).json() as any
     assert.equal(me.status, 'active')
     assert.equal(me.rejectionReason, null)
-    assert.equal((await call('GET', '/profiles', { token: u.token })).status, 200)
+    assert.equal((await call('GET', '/requests/received', { token: u.token })).status, 200)
   })
 
   it('unverified profiles never appear on the wall', async () => {
@@ -152,14 +153,33 @@ async function adminToken() {
 }
 
 /** Signs up a user and gets them verified, returning their token and bumpId. */
-async function activeUser(email: string, name: string) {
-  const u = await signup(email, name)
+async function activeUser(email: string, name: string, gender: 'man' | 'woman' = 'man') {
+  const u = await signup(email, name, gender)
   assert.equal((await call('POST', '/verification', { token: u.token, form: files(JPEG, WEBM) })).status, 201)
   const admin = await adminToken()
   const list = (await (await call('GET', '/admin/verifications', { token: admin })).json()) as any[]
   const item = list.find((x) => x.user.bumpId === u.user.bumpId)
   assert.equal((await call('POST', `/admin/verifications/${item.id}/decision`, { token: admin, json: { decision: 'approve' } })).status, 200)
   return u
+}
+
+function setCredits(email: string, n: number) {
+  const d = new DatabaseSync(path.join(dir, 't.db'))
+  d.prepare('UPDATE users SET request_credits = ? WHERE email = ?').run(n, email)
+  d.close()
+}
+
+/** Connects a man and a woman through an accepted request; returns the connection id. */
+async function connect(man: { token: string }, manEmail: string, woman: { token: string; user: { bumpId: string } }) {
+  setCredits(manEmail, 5)
+  const r = await call('POST', '/requests', { token: man.token, json: { bumpId: woman.user.bumpId, note: 'hello there' } })
+  assert.equal(r.status, 201)
+  const inbox = (await (await call('GET', '/requests/received', { token: woman.token })).json()) as any[]
+  const d = await call('POST', `/requests/${inbox[0].id}/decision`, { token: woman.token, json: { decision: 'accept' } })
+  assert.equal(d.status, 200)
+  const j = (await d.json()) as any
+  assert.equal(j.status, 'accepted')
+  return j.connectionId as string
 }
 
 function pay(planId: string, reference: string, proof: Buffer = PNG) {
@@ -170,18 +190,30 @@ function pay(planId: string, reference: string, proof: Buffer = PNG) {
   return f
 }
 
-describe('memberships and payments', () => {
-  it('matching is free but sending messages needs a membership', async () => {
-    const a = await activeUser('pa@x.test', 'Pa')
-    const b = await activeUser('pb@x.test', 'Pb')
-    await call('POST', '/actions', { token: a.token, json: { bumpId: b.user.bumpId, action: 'like' } })
-    const m = (await (await call('POST', '/actions', { token: b.token, json: { bumpId: a.user.bumpId, action: 'like' } })).json()) as any
-    assert.equal(m.matched, true)
-    const r = await call('POST', `/connections/${m.connectionId}/messages`, { token: a.token, json: { body: 'hi' } })
-    assert.equal(r.status, 402)
-    assert.equal(((await r.json()) as any).error, 'membership_required')
-    // reading is still allowed
-    assert.equal((await call('GET', `/connections/${m.connectionId}/messages`, { token: a.token })).status, 200)
+describe('request packs and payments', () => {
+  it('wall shows only women to men; women get 403', async () => {
+    const man = await activeUser('wm@x.test', 'Wm')
+    const woman = await activeUser('ww@x.test', 'Ww', 'woman')
+    const wall = (await (await call('GET', '/profiles', { token: man.token })).json()) as any[]
+    assert.ok(wall.length >= 1)
+    assert.ok(wall.some((p) => p.bumpId === woman.user.bumpId))
+    assert.ok(!wall.some((p) => p.bumpId === man.user.bumpId))
+    const r = await call('GET', '/profiles', { token: woman.token })
+    assert.equal(r.status, 403)
+    assert.equal(((await r.json()) as any).error, 'not_applicable')
+  })
+
+  it('women cannot see packs; chat works without payment once a request is accepted', async () => {
+    const man = await activeUser('pa@x.test', 'Pa')
+    const woman = await activeUser('pb@x.test', 'Pb', 'woman')
+    const r = await call('GET', '/membership/plans', { token: woman.token })
+    assert.equal(r.status, 403)
+    assert.equal(((await r.json()) as any).error, 'not_applicable')
+    assert.equal((await call('POST', '/payments', { token: woman.token, form: pay('pack10', 'UTR999999') })).status, 403)
+    const cid = await connect(man, 'pa@x.test', woman)
+    assert.equal((await call('POST', `/connections/${cid}/messages`, { token: man.token, json: { body: 'hi' } })).status, 200)
+    assert.equal((await call('POST', `/connections/${cid}/messages`, { token: woman.token, json: { body: 'hey' } })).status, 200)
+    assert.equal((await call('GET', `/connections/${cid}/messages`, { token: man.token })).status, 200)
   })
 
   it('rejects bad input and unverified users', async () => {
@@ -190,34 +222,33 @@ describe('memberships and payments', () => {
 
     const u = await activeUser('pc@x.test', 'Pc')
     const plans = (await (await call('GET', '/membership/plans', { token: u.token })).json()) as any
-    assert.ok(plans.plans.length >= 1)
-    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('nope', 'UTR123456') })).status, 400, 'unknown plan')
-    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('monthly', 'x') })).status, 400, 'short reference')
-    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('monthly', 'UTR123456', Buffer.from('not an image')) })).status, 415)
-    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('monthly', 'UTR123456', Buffer.concat([PNG, Buffer.alloc(5 * 1024 * 1024)])) })).status, 413)
+    assert.deepEqual(plans.plans.map((p: any) => p.id).sort(), ['pack10', 'pack20'])
+    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('nope', 'UTR123456') })).status, 400, 'unknown pack')
+    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('pack10', 'x') })).status, 400, 'short reference')
+    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('pack10', 'UTR123456', Buffer.from('not an image')) })).status, 415)
+    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('pack10', 'UTR123456', Buffer.concat([PNG, Buffer.alloc(5 * 1024 * 1024)])) })).status, 413)
     assert.deepEqual(await (await call('GET', '/payments/mine', { token: u.token })).json(), [], 'nothing recorded after failures')
   })
 
-  it('submit -> reject -> resubmit -> approve grants time; renewals stack', async () => {
+  it('submit -> reject -> resubmit -> approve grants requests; credits stack', async () => {
     const admin = await adminToken()
     const u = await activeUser('pd@x.test', 'Pd')
     const other = await activeUser('pe@x.test', 'Pe')
 
-    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('monthly', 'utr111111') })).status, 201)
-    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('monthly', 'UTR222222', Buffer.concat([PNG, Buffer.from('x')])) })).status, 409, 'one pending at a time')
+    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('pack10', 'utr111111') })).status, 201)
+    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('pack10', 'UTR222222', Buffer.concat([PNG, Buffer.from('x')])) })).status, 409, 'one pending at a time')
 
-    // the same reference (any case) or screenshot can't be reused by someone else while it's live
-    let r = await call('POST', '/payments', { token: other.token, form: pay('monthly', 'UTR111111', Buffer.concat([PNG, Buffer.from('y')])) })
+    let r = await call('POST', '/payments', { token: other.token, form: pay('pack10', 'UTR111111', Buffer.concat([PNG, Buffer.from('y')])) })
     assert.equal(((await r.json()) as any).error, 'reference_used')
-    r = await call('POST', '/payments', { token: other.token, form: pay('monthly', 'UTR333333') })
+    r = await call('POST', '/payments', { token: other.token, form: pay('pack10', 'UTR333333') })
     assert.equal(((await r.json()) as any).error, 'proof_reused')
 
-    // non-admins can't see the queue or proofs
     assert.equal((await call('GET', '/admin/payments', { token: u.token })).status, 403)
 
     const queue = (await (await call('GET', '/admin/payments', { token: admin })).json()) as any[]
     const item = queue.find((p) => p.user.bumpId === u.user.bumpId)
-    assert.equal(item.amountPaise, 49900, 'price comes from the server plan')
+    assert.equal(item.amountPaise, 49900, 'price comes from the server pack')
+    assert.equal(item.requests, 10)
     assert.equal(item.reference, 'UTR111111')
     const proof = await call('GET', `/admin/payments/${item.id}/proof`, { token: admin })
     assert.equal(proof.status, 200)
@@ -227,37 +258,41 @@ describe('memberships and payments', () => {
     assert.equal((await call('POST', `/admin/payments/${item.id}/decision`, { token: admin, json: { decision: 'reject' } })).status, 400, 'reason required')
     assert.equal((await call('POST', `/admin/payments/${item.id}/decision`, { token: admin, json: { decision: 'reject', reason: 'Amount does not match' } })).status, 200)
     let me = (await (await call('GET', '/me', { token: u.token })).json()) as any
-    assert.equal(me.isMember, false)
+    assert.equal(me.requestCredits, 0)
     const hist = (await (await call('GET', '/payments/mine', { token: u.token })).json()) as any[]
     assert.equal(hist[0].status, 'rejected')
     assert.equal(hist[0].reason, 'Amount does not match')
 
-    // a rejected reference/screenshot frees up, so the user can fix and resubmit
-    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('monthly', 'UTR111111') })).status, 201)
+    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('pack10', 'UTR111111') })).status, 201)
     const next = ((await (await call('GET', '/admin/payments', { token: admin })).json()) as any[]).find((p) => p.user.bumpId === u.user.bumpId)
     assert.equal((await call('POST', `/admin/payments/${next.id}/decision`, { token: admin, json: { decision: 'approve' } })).status, 200)
     assert.equal((await call('POST', `/admin/payments/${next.id}/decision`, { token: admin, json: { decision: 'approve' } })).status, 409, 'no double credit')
 
     me = (await (await call('GET', '/me', { token: u.token })).json()) as any
-    assert.equal(me.isMember, true)
-    const DAY = 86400000
-    const first = me.membershipExpiresAt as number
-    assert.ok(Math.abs(first - (Date.now() + 30 * DAY)) < 60_000)
+    assert.equal(me.requestCredits, 10)
 
-    // renewal stacks on top of the remaining time
-    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('quarterly', 'UTR444444', Buffer.concat([PNG, Buffer.from('z')])) })).status, 201)
+    // a second pack stacks on the remaining credits
+    assert.equal((await call('POST', '/payments', { token: u.token, form: pay('pack20', 'UTR444444', Buffer.concat([PNG, Buffer.from('z')])) })).status, 201)
     const renew = ((await (await call('GET', '/admin/payments', { token: admin })).json()) as any[]).find((p) => p.user.bumpId === u.user.bumpId)
+    assert.equal(renew.requests, 20)
     assert.equal((await call('POST', `/admin/payments/${renew.id}/decision`, { token: admin, json: { decision: 'approve' } })).status, 200)
     me = (await (await call('GET', '/me', { token: u.token })).json()) as any
-    assert.equal(me.membershipExpiresAt, first + 90 * DAY)
+    assert.equal(me.requestCredits, 30)
   })
 
-  it('a paid member can send messages while an unpaid peer stays blocked', async () => {
-    const paid = (await (await call('POST', '/login', { json: { email: 'pd@x.test', password: 'Tr0ub4dor&3xKq' } })).json()) as any
-    const peer = await activeUser('pf@x.test', 'Pf')
-    await call('POST', '/actions', { token: paid.token, json: { bumpId: peer.user.bumpId, action: 'like' } })
-    const m = (await (await call('POST', '/actions', { token: peer.token, json: { bumpId: paid.user.bumpId, action: 'like' } })).json()) as any
-    assert.equal((await call('POST', `/connections/${m.connectionId}/messages`, { token: paid.token, json: { body: 'hello' } })).status, 200)
-    assert.equal((await call('POST', `/connections/${m.connectionId}/messages`, { token: peer.token, json: { body: 'blocked' } })).status, 402)
+  it('requests spend credits: 402 at zero, 409 on repeat', async () => {
+    const man = await activeUser('pg@x.test', 'Pg')
+    const woman = await activeUser('ph@x.test', 'Ph', 'woman')
+    let r = await call('POST', '/requests', { token: man.token, json: { bumpId: woman.user.bumpId, note: 'hi' } })
+    assert.equal(r.status, 402)
+    assert.equal(((await r.json()) as any).error, 'no_requests_left')
+    setCredits('pg@x.test', 2)
+    assert.equal((await call('POST', '/requests', { token: man.token, json: { bumpId: woman.user.bumpId, note: 'hi' } })).status, 201)
+    r = await call('POST', '/requests', { token: man.token, json: { bumpId: woman.user.bumpId, note: 'again' } })
+    assert.equal(r.status, 409)
+    assert.equal(((await r.json()) as any).error, 'already_requested')
+    const me = (await (await call('GET', '/me', { token: man.token })).json()) as any
+    assert.equal(me.requestCredits, 1)
+    assert.equal(me.gender, 'man')
   })
 })

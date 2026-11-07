@@ -14,11 +14,15 @@ export function sessionValid(sub: string, tv: number | undefined): boolean {
 }
 
 /** Verifies the bearer JWT and that the session has not been revoked; sets req.user. */
+const verifySession = async (req: FastifyRequest, reply: FastifyReply) => {
+  await req.jwtVerify()
+  if (!sessionValid(req.user.sub, req.user.tv)) return reply.code(401).send({ error: 'unauthorized' })
+}
+
+// A getter, not a constant array: @fastify/rate-limit appends its hook to a route's own onRequest array, and a single
+// array shared by every authenticated route would hand one route's limit to all of them.
 export const authed = {
-  onRequest: [async (req: FastifyRequest, reply: FastifyReply) => {
-    await req.jwtVerify()
-    if (!sessionValid(req.user.sub, req.user.tv)) return reply.code(401).send({ error: 'unauthorized' })
-  }],
+  get onRequest() { return [verifySession] },
 }
 
 /**

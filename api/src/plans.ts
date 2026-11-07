@@ -1,12 +1,12 @@
 /**
- * Membership plans. Prices are PLACEHOLDERS: the original product's pricing is behind login
- * and was not observed. Set your own. Amounts are in paise (INR minor units).
+ * Request packs: men buy requests (one request = one introduction to a woman). Amounts are in paise (INR minor units).
+ * Prices are set by the product owner: 10 requests for 499 rupees and 20 for 899 rupees.
  */
-export type Plan = { id: string; name: string; amountPaise: number; days: number }
+export type Plan = { id: string; name: string; amountPaise: number; requests: number }
 
 export const PLANS: readonly Plan[] = [
-  { id: 'monthly', name: '1 month', amountPaise: 49900, days: 30 },
-  { id: 'quarterly', name: '3 months', amountPaise: 119900, days: 90 },
+  { id: 'pack10', name: '10 requests', amountPaise: 49900, requests: 10 },
+  { id: 'pack20', name: '20 requests', amountPaise: 89900, requests: 20 },
 ]
 
 export const getPlan = (id: string) => PLANS.find((p) => p.id === id)

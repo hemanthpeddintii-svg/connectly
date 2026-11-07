@@ -1,45 +1,58 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useMessagesQuery, useSendMessageMutation } from '../api'
+import { useConnectionsQuery, useMessagesQuery, useSendMessageMutation } from '../api'
 import MessageAttachment from '../features/attachments/MessageAttachment'
 import AttachmentComposer from '../features/attachments/AttachmentComposer'
+import SafetyMenu from '../features/safety/SafetyMenu'
+import Monogram from '../components/Monogram'
+import RealPerson from '../components/Badge'
+import { BackIcon, SendIcon } from '../components/icons'
+import { field } from '../ui'
 
 export default function Chat() {
   const { id = '' } = useParams()
   const { data, isLoading, isError } = useMessagesQuery(id)
+  const { data: connections } = useConnectionsQuery()
   const [send, { isLoading: sending }] = useSendMessageMutation()
   const [text, setText] = useState('')
-  const [needsMembership, setNeedsMembership] = useState(false)
   const [sendError, setSendError] = useState('')
   const end = useRef<HTMLDivElement>(null)
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }) }, [data?.length])
+  const who = connections?.find((c) => c.id === id)?.profile
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     const body = text.trim()
     if (!body) return
     setText('')
-    setNeedsMembership(false)
     setSendError('')
     try { await send({ id, body }).unwrap() }
-    catch (err: any) {
+    catch (err) {
       setText(body)
-      if (err?.status === 402) setNeedsMembership(true)
-      else if (err?.data?.error === 'blocked') setSendError("You can't message this person.")
-      else setSendError('Message not sent. Try again.')
+      setSendError((err as { data?: { error?: string } })?.data?.error === 'blocked' ? "You can't message this person." : 'Message not sent. Try again.')
     }
   }
 
-  if (isError) return <p>Conversation not found. <Link className="underline" to="/connections">Back</Link></p>
+  if (isError) {
+    return <p role="alert" className="p-5 text-slate">Conversation not found. <Link className="font-semibold text-ink underline" to="/connections">Back to chats</Link></p>
+  }
   return (
-    <div className="flex h-[calc(100dvh-9rem)] flex-col">
-      <Link to="/connections" className="mb-2 text-sm text-stone-500 underline">← Connections</Link>
-      <div className="flex-1 space-y-2 overflow-y-auto rounded-xl border border-stone-200 bg-white p-3">
-        {isLoading && <p className="text-stone-500">Loading…</p>}
+    <div className="flex h-dvh flex-col md:h-[calc(100dvh-4rem)]">
+      <div className="flex h-16 flex-none items-center gap-2 border-b border-stone-200 px-3">
+        <Link to="/connections" aria-label="Back to chats" className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-mist"><BackIcon /></Link>
+        {who && <Monogram name={who.name} size={36} />}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h1 className="truncate font-display text-base font-semibold">{who?.name ?? 'Chat'}</h1>
+          {who && <RealPerson />}
+        </div>
+        {who && <SafetyMenu bumpId={who.bumpId} />}
+      </div>
+      <div role="log" aria-label="Messages" className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 py-3">
+        {isLoading && <p role="status" className="text-slate">Loading…</p>}
         {data?.map((m) => (
-          <div key={m.id} className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
+          <div key={m.id} className="flex">
             {m.kind === 'text' ? (
-              <p className={`max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 ${m.mine ? 'bg-stone-900 text-white' : 'bg-stone-100'}`}>{m.body}</p>
+              <p className={`max-w-[80%] whitespace-pre-wrap break-words rounded-[20px] px-3.5 py-2 ${m.mine ? 'ml-auto bg-ink text-paper' : 'mr-auto bg-mist'}`}>{m.body}</p>
             ) : (
               <MessageAttachment connectionId={id} message={m} />
             )}
@@ -47,18 +60,17 @@ export default function Chat() {
         ))}
         <div ref={end} />
       </div>
-      {needsMembership && (
-        <p role="alert" className="mt-2 rounded-md bg-amber-50 p-3 text-sm text-amber-900">
-          Sending messages needs a membership. <Link className="underline" to="/membership">See plans</Link>
-        </p>
-      )}
-      {sendError && <p role="alert" className="mt-2 text-sm text-red-600">{sendError}</p>}
-      <AttachmentComposer connectionId={id} />
-      <form onSubmit={submit} className="mt-2 flex gap-2">
-        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={2000} placeholder="Write a message"
-          className="flex-1 rounded-md border border-stone-300 bg-white px-3 py-2 outline-none focus:border-stone-900" />
-        <button disabled={sending || !text.trim()} className="rounded-md bg-stone-900 px-4 py-2 text-white disabled:opacity-50">Send</button>
-      </form>
+      <div className="flex-none border-t border-stone-200 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {sendError && <p role="alert" className="mb-2 text-sm text-ember-deep">{sendError}</p>}
+        <AttachmentComposer connectionId={id}>
+          <form onSubmit={submit} className="flex flex-1 items-center gap-2">
+            <label className="sr-only" htmlFor="msg">Message</label>
+            <input id="msg" value={text} onChange={(e) => setText(e.target.value)} maxLength={2000} placeholder="Write a message" className={`${field} !rounded-full !py-2.5`} />
+            <button disabled={sending || !text.trim()} aria-label="Send"
+              className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-ember text-ink disabled:opacity-50"><SendIcon size={22} /></button>
+          </form>
+        </AttachmentComposer>
+      </div>
     </div>
   )
 }

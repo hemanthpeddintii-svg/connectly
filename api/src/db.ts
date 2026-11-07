@@ -86,7 +86,12 @@ const userCols = (db.prepare('PRAGMA table_info(users)').all() as { name: string
 if (!userCols.includes('role')) db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
 if (!userCols.includes('membership_expires_at')) db.exec('ALTER TABLE users ADD COLUMN membership_expires_at INTEGER')
 if (!userCols.includes('token_version')) db.exec('ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0')
+if (!userCols.includes('gender')) db.exec('ALTER TABLE users ADD COLUMN gender TEXT')
+if (!userCols.includes('request_credits')) db.exec('ALTER TABLE users ADD COLUMN request_credits INTEGER NOT NULL DEFAULT 0')
 if (!userCols.includes('rejection_reason')) db.exec('ALTER TABLE users ADD COLUMN rejection_reason TEXT')
+
+const payCols = (db.prepare('PRAGMA table_info(payments)').all() as { name: string }[]).map((c) => c.name)
+if (!payCols.includes('credits')) db.exec('ALTER TABLE payments ADD COLUMN credits INTEGER NOT NULL DEFAULT 0')
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS password_resets (
@@ -120,6 +125,8 @@ export type UserRow = {
   role: 'user' | 'admin'
   rejection_reason: string | null
   membership_expires_at: number | null
+  gender: 'man' | 'woman' | null
+  request_credits: number
   token_version: number
   created_at: number
 }
@@ -160,7 +167,7 @@ export function selfProfile(u: UserRow) {
     status: u.status,
     role: u.role,
     rejectionReason: u.status === 'rejected' ? u.rejection_reason : null,
-    membershipExpiresAt: u.membership_expires_at,
-    isMember: u.role === 'admin' || (u.membership_expires_at ?? 0) > Date.now(),
+    gender: u.gender,
+    requestCredits: u.request_credits,
   }
 }

@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 
 const PORT = 4200 + Math.floor(Math.random() * 100)
 const BASE = `http://127.0.0.1:${PORT}/v0`
@@ -24,14 +25,14 @@ async function call(method: string, url: string, opts: { token?: string; json?: 
 
 type Session = { token: string; user: { bumpId: string } }
 
-async function signup(email: string, name: string, age = 30, interests: string[] = []) {
-  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age, interests } })
+async function signup(email: string, name: string, age = 30, interests: string[] = [], gender: 'man' | 'woman' = 'man') {
+  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age, interests, gender } })
   assert.equal(r.status, 200)
   return (await r.json()) as Session
 }
 
-async function activeUser(email: string, name: string, age = 30, interests: string[] = []) {
-  const u = await signup(email, name, age, interests)
+async function activeUser(email: string, name: string, age = 30, interests: string[] = [], gender: 'man' | 'woman' = 'man') {
+  const u = await signup(email, name, age, interests, gender)
   const f = new FormData()
   f.set('selfie', new Blob([new Uint8Array(JPEG)], { type: 'image/jpeg' }), 'me.jpg')
   f.set('voice', new Blob([new Uint8Array(WEBM)], { type: 'audio/webm' }), 'v.webm')
@@ -44,8 +45,9 @@ async function activeUser(email: string, name: string, age = 30, interests: stri
   return u
 }
 
+const woman = (email: string, name: string, age = 30, interests: string[] = []) => activeUser(email, name, age, interests, 'woman')
 // Only the members created for the wall test: earlier tests leave other active members on the wall.
-const COHORT = new Set(['Viewer', 'Other', 'Young', 'Mid', 'Old', 'None'])
+const COHORT = new Set(['Young', 'Mid', 'Old', 'None'])
 const wallNames = async (token: string) => {
   const r = await call('GET', '/profiles?limit=50', { token })
   assert.equal(r.status, 200)
@@ -149,20 +151,20 @@ describe('wall filtering', () => {
   it('applies age range and interests to the wall only, per viewer', async () => {
     const viewer = await activeUser('w-viewer@x.test', 'Viewer', 30)
     const other = await activeUser('w-other@x.test', 'Other', 30)
-    const young = await activeUser('w-young@x.test', 'Young', 22, ['Hiking', 'Jazz'])
-    await activeUser('w-mid@x.test', 'Mid', 35, ['chess', 'Cooking'])
-    await activeUser('w-old@x.test', 'Old', 50, ['HIKING'])
-    await activeUser('w-none@x.test', 'None', 28)
+        const young = await woman('w-young@x.test', 'Young', 22, ['Hiking', 'Jazz'])
+    await woman('w-mid@x.test', 'Mid', 35, ['chess', 'Cooking'])
+    await woman('w-old@x.test', 'Old', 50, ['HIKING'])
+    await woman('w-none@x.test', 'None', 28)
     // unverified candidates never appear regardless of filters
-    await signup('w-unv@x.test', 'Unv2', 28, ['hiking'])
+    await signup('w-unv@x.test', 'Unv2', 28, ['hiking'], 'woman')
 
-    const everyone = ['None', 'Old', 'Mid', 'Other', 'Young'].sort()
+    const everyone = ['None', 'Old', 'Mid', 'Young'].sort()
     // no filter => everyone
     assert.deepEqual(await wallNames(viewer.token), everyone)
 
     // age range, inclusive on both ends
     await put(viewer.token, { minAge: 22, maxAge: 35 })
-    assert.deepEqual(await wallNames(viewer.token), ['Mid', 'None', 'Other', 'Young'])
+    assert.deepEqual(await wallNames(viewer.token), ['Mid', 'None', 'Young'])
     await put(viewer.token, { minAge: 36 })
     assert.deepEqual(await wallNames(viewer.token), ['Old'])
     await put(viewer.token, { maxAge: 21 })
@@ -186,10 +188,10 @@ describe('wall filtering', () => {
     assert.equal((await call('GET', '/me', { token: viewer.token })).status, 200)
 
     // another member's wall is unaffected by the viewer's preferences, and vice versa
-    assert.deepEqual(await wallNames(other.token), ['None', 'Old', 'Mid', 'Viewer', 'Young'].sort())
+    assert.deepEqual(await wallNames(other.token), everyone)
     await put(other.token, { maxAge: 25 })
     assert.deepEqual(await wallNames(other.token), ['Young'])
-    assert.deepEqual(await wallNames(young.token), ['Mid', 'None', 'Old', 'Other', 'Viewer'].sort())
+    assert.equal((await call('GET', '/profiles', { token: young.token })).status, 403, 'women have no wall')
     assert.deepEqual(await wallNames(viewer.token), [])
 
     // clearing restores the full wall
@@ -199,10 +201,14 @@ describe('wall filtering', () => {
 
   it('does not filter the connections list', async () => {
     const a = await activeUser('c-a@x.test', 'Ca', 30)
-    const b = await activeUser('c-b@x.test', 'Cb', 60, ['chess'])
-    await call('POST', '/actions', { token: a.token, json: { bumpId: b.user.bumpId, action: 'like' } })
-    const m = (await (await call('POST', '/actions', { token: b.token, json: { bumpId: a.user.bumpId, action: 'like' } })).json()) as any
-    assert.equal(m.matched, true)
+    const b = await woman('c-b@x.test', 'Cb', 60, ['chess'])
+    const d = new DatabaseSync(path.join(dir, 't.db'))
+    d.prepare('UPDATE users SET request_credits = 3 WHERE email = ?').run('c-a@x.test')
+    d.close()
+    const sent = await call('POST', '/requests', { token: a.token, json: { bumpId: b.user.bumpId, note: 'hello' } })
+    assert.equal(sent.status, 201)
+    const m = (await (await call('POST', `/requests/${((await sent.json()) as any).id}/decision`, { token: b.token, json: { decision: 'accept' } })).json()) as any
+    assert.equal(m.status, 'accepted')
 
     await put(a.token, { maxAge: 25, interests: ['nothing-matches'] })
     const conns = (await (await call('GET', '/connections', { token: a.token })).json()) as any[]

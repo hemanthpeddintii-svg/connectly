@@ -3,20 +3,31 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
 
 export type Profile = { bumpId: string; name: string; age: number; bio: string; interests: string[] }
 export type UserStatus = 'unverified' | 'pending' | 'active' | 'rejected' | 'deleted'
-export type Me = Profile & { email: string; status: UserStatus; role: 'user' | 'admin'; rejectionReason: string | null; membershipExpiresAt: number | null; isMember: boolean }
+export type Gender = 'man' | 'woman'
+export type Me = Profile & {
+  email: string; status: UserStatus; role: 'user' | 'admin'; rejectionReason: string | null
+  gender: Gender | null; requestCredits: number
+}
 export type VerificationStatus = 'pending' | 'approved' | 'rejected'
 export type AdminVerification = {
   id: string; status: VerificationStatus; reason: string | null; createdAt: number; reviewedAt: number | null
   user: { bumpId: string; name: string; age: number; email: string }
 }
-export type Plan = { id: string; name: string; amountPaise: number; days: number }
+export type Plan = { id: 'pack10' | 'pack20'; name: string; amountPaise: number; requests: number }
 export type PlansResponse = { plans: Plan[]; payment: { payeeName: string | null; upiId: string | null; currency: string } }
 export type Payment = {
-  id: string; planId: string; amountPaise: number; days: number; reference: string
+  id: string; planId: Plan['id']; amountPaise: number; requests: number; reference: string
   status: VerificationStatus; reason: string | null; createdAt: number; reviewedAt: number | null
 }
 export type AdminPayment = Payment & { user: { bumpId: string; name: string; email: string } }
 export type Connection = { id: string; createdAt: number; profile: Profile }
+export type RequestStatus = 'pending' | 'accepted' | 'declined'
+export type ReceivedRequest = { id: string; status: RequestStatus; note: string; createdAt: number; from: Profile }
+export type SentRequest = {
+  id: string; status: RequestStatus; note: string; createdAt: number
+  to: { bumpId: string; name: string; age: number }; connectionId: string | null
+}
+export type RequestDecision = 'accept' | 'decline'
 export type Message = {
   id: string; mine: boolean; kind: 'text' | 'image' | 'voice'; body: string
   attachmentMime: string | null; attachmentDurationMs: number | null; createdAt: number
@@ -63,7 +74,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
 export const api = createApi({
   reducerPath: 'api',
   baseQuery,
-  tagTypes: ['Me', 'Wall', 'Connections', 'Messages', 'AdminVerifications', 'Payments', 'AdminPayments'],
+  tagTypes: ['Me', 'Wall', 'Requests', 'SentRequests', 'Connections', 'Messages', 'AdminVerifications', 'Payments', 'AdminPayments'],
   endpoints: (b) => ({
     login: b.mutation<AuthResult, { email: string; password: string }>({
       query: (body) => ({ url: 'login', method: 'POST', body }),
@@ -84,11 +95,12 @@ export const api = createApi({
     logoutAll: b.mutation<{ ok: true }, void>({
       query: () => ({ url: 'logout-all', method: 'POST' }),
     }),
-    signup: b.mutation<AuthResult, { email: string; password: string; name: string; age: number; bio?: string; interests?: string[] }>({
+    signup: b.mutation<AuthResult, { email: string; password: string; name: string; age: number; gender: Gender; bio?: string; interests?: string[] }>({
       query: (body) => ({ url: 'signup', method: 'POST', body }),
     }),
     me: b.query<Me, void>({ query: () => 'me', providesTags: ['Me'] }),
-    updateMe: b.mutation<Me, Partial<Pick<Me, 'name' | 'bio' | 'interests'>>>({
+    // gender is accepted only while the account has none (legacy accounts).
+    updateMe: b.mutation<Me, Partial<Pick<Me, 'name' | 'bio' | 'interests'>> & { gender?: Gender }>({
       query: (body) => ({ url: 'me', method: 'PATCH', body }),
       invalidatesTags: ['Me'],
     }),
@@ -119,9 +131,22 @@ export const api = createApi({
       invalidatesTags: ['AdminPayments', 'Me'],
     }),
     wall: b.query<Profile[], void>({ query: () => 'profiles', providesTags: ['Wall'] }),
-    act: b.mutation<{ matched: boolean; connectionId?: string }, { bumpId: string; action: 'like' | 'skip' }>({
-      query: (body) => ({ url: 'actions', method: 'POST', body }),
-      invalidatesTags: ['Wall', 'Connections'],
+    skip: b.mutation<Record<string, never>, { bumpId: string }>({
+      query: ({ bumpId }) => ({ url: 'actions', method: 'POST', body: { bumpId, action: 'skip' } }),
+      invalidatesTags: ['Wall'],
+    }),
+    sendRequest: b.mutation<{ id: string; creditsLeft: number }, { bumpId: string; note?: string }>({
+      query: (body) => ({ url: 'requests', method: 'POST', body }),
+      invalidatesTags: ['Me', 'Wall', 'SentRequests'],
+    }),
+    receivedRequests: b.query<ReceivedRequest[], void>({
+      query: () => 'requests/received?status=pending',
+      providesTags: ['Requests'],
+    }),
+    sentRequests: b.query<SentRequest[], void>({ query: () => 'requests/sent', providesTags: ['SentRequests'] }),
+    decideRequest: b.mutation<{ status: 'accepted'; connectionId: string } | { status: 'declined' }, { id: string; decision: RequestDecision }>({
+      query: ({ id, decision }) => ({ url: `requests/${id}/decision`, method: 'POST', body: { decision } }),
+      invalidatesTags: ['Requests', 'Connections'],
     }),
     connections: b.query<Connection[], void>({ query: () => 'connections', providesTags: ['Connections'] }),
     messages: b.query<Message[], string>({
@@ -137,5 +162,5 @@ export const api = createApi({
 
 export const {
   useLoginMutation, useSignupMutation, useForgotPasswordMutation, useResetPasswordMutation, useChangePasswordMutation, useLogoutAllMutation, useMeQuery, useUpdateMeMutation, useWallQuery,
-  useActMutation, useConnectionsQuery, useSubmitVerificationMutation, usePlansQuery, useMyPaymentsQuery, useSubmitPaymentMutation, useAdminPaymentsQuery, useDecidePaymentMutation, useAdminVerificationsQuery, useDecideVerificationMutation, useMessagesQuery, useSendMessageMutation,
+  useSkipMutation, useSendRequestMutation, useReceivedRequestsQuery, useSentRequestsQuery, useDecideRequestMutation, useConnectionsQuery, useSubmitVerificationMutation, usePlansQuery, useMyPaymentsQuery, useSubmitPaymentMutation, useAdminPaymentsQuery, useDecidePaymentMutation, useAdminVerificationsQuery, useDecideVerificationMutation, useMessagesQuery, useSendMessageMutation,
 } = api

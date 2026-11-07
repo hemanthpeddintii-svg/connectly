@@ -21,6 +21,10 @@ export function useRealtime() {
         try {
           const m = JSON.parse(e.data)
           if (m.type === 'message') dispatch(api.util.invalidateTags([{ type: 'Messages', id: m.connectionId }]))
+          // A woman received a request.
+          else if (m.type === 'request') dispatch(api.util.invalidateTags(['Requests']))
+          // A man's request was answered; an accepted one also opens a chat.
+          else if (m.type === 'request_update') dispatch(api.util.invalidateTags(['SentRequests', 'Connections']))
         } catch { /* ignore malformed frame */ }
       }
       ws.onclose = (e) => {

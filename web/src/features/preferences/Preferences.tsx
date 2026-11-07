@@ -76,9 +76,9 @@ function PreferencesForm({ saved }: { saved: Prefs }) {
 
   return (
     <form onSubmit={submit} noValidate aria-labelledby="prefs-title" className="flex flex-col gap-3">
-      <h2 id="prefs-title" className="text-lg font-semibold">Wall filters</h2>
+      <h2 id="prefs-title" className="text-lg font-semibold">Community filters</h2>
       <p className="text-sm text-stone-500">
-        Only the profiles shown on your wall are filtered. Your connections and chats are not affected, and nobody else can see these settings.
+        Only the profiles shown in your community are filtered. Your connections and chats are not affected, and nobody else can see these settings.
       </p>
       <div className="flex gap-3">
         <label className="flex flex-1 flex-col gap-1 text-sm">

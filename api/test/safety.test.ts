@@ -4,11 +4,13 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 
 const PORT = 4300 + Math.floor(Math.random() * 100)
 const BASE = `http://127.0.0.1:${PORT}/v0`
 let proc: ChildProcess
 let dir: string
+const dbFile = () => path.join(dir, 't.db')
 
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)])
 const WEBM = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(64)])
@@ -25,8 +27,10 @@ async function call(method: string, url: string, opts: { token?: string; json?: 
 }
 const json = async (r: Response) => (await r.json()) as any
 
-async function signup(email: string, name: string): Promise<Account> {
-  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30 } })
+type Gender = 'man' | 'woman'
+
+async function signup(email: string, name: string, gender: Gender = 'man'): Promise<Account> {
+  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
   assert.equal(r.status, 200)
   const b = await json(r)
   return { token: b.token, bumpId: b.user.bumpId }
@@ -35,8 +39,8 @@ async function signup(email: string, name: string): Promise<Account> {
 let adminToken = ''
 let admin2: Account
 
-async function activeUser(email: string, name: string): Promise<Account> {
-  const u = await signup(email, name)
+async function activeUser(email: string, name: string, gender: Gender = 'man'): Promise<Account> {
+  const u = await signup(email, name, gender)
   const f = new FormData()
   f.set('selfie', new Blob([new Uint8Array(JPEG)], { type: 'image/jpeg' }), 'me.jpg')
   f.set('voice', new Blob([new Uint8Array(WEBM)], { type: 'audio/webm' }), 'v.webm')
@@ -47,17 +51,31 @@ async function activeUser(email: string, name: string): Promise<Account> {
   return u
 }
 
+const activeWoman = (email: string, name: string) => activeUser(email, name, 'woman')
+const giveCredits = (u: Account, email: string, n = 5) => {
+  const d = new DatabaseSync(dbFile())
+  d.prepare('UPDATE users SET request_credits = ? WHERE email = ?').run(n, email)
+  d.close()
+  return u
+}
+const sendRequest = (from: Account, to: Account, note = 'hi') => call('POST', '/requests', { token: from.token, json: { bumpId: to.bumpId, note } })
 const wallNames = async (u: Account) => (await json(await call('GET', '/profiles', { token: u.token }))).map((p: any) => p.name) as string[]
 const connNames = async (u: Account) => (await json(await call('GET', '/connections', { token: u.token }))).map((c: any) => c.profile.name) as string[]
 const block = (u: Account, target: Account) => call('POST', '/blocks', { token: u.token, json: { bumpId: target.bumpId } })
 const report = (u: Account, target: Account | string, reason = 'spam', details?: string) =>
   call('POST', '/reports', { token: u.token, json: { bumpId: typeof target === 'string' ? target : target.bumpId, reason, details } })
 
-async function match(a: Account, b: Account) {
-  await call('POST', '/actions', { token: a.token, json: { bumpId: b.bumpId, action: 'like' } })
-  const r = await json(await call('POST', '/actions', { token: b.token, json: { bumpId: a.bumpId, action: 'like' } }))
-  assert.equal(r.matched, true)
-  return r.connectionId as string
+// man (needs email for credits) sends a request, woman accepts; returns the connection id
+async function match(man: Account, manEmail: string, woman: Account) {
+  giveCredits(man, manEmail)
+  const sent = await sendRequest(man, woman)
+  assert.equal(sent.status, 201)
+  const { id } = await json(sent)
+  const r = await call('POST', `/requests/${id}/decision`, { token: woman.token, json: { decision: 'accept' } })
+  assert.equal(r.status, 200)
+  const b = await json(r)
+  assert.equal(b.status, 'accepted')
+  return b.connectionId as string
 }
 
 async function openReports(status = 'open') {
@@ -67,7 +85,7 @@ async function openReports(status = 'open') {
 before(async () => {
   dir = await mkdtemp(path.join(tmpdir(), 'connectly-safety-'))
   proc = spawn(process.execPath, ['src/server.ts'], {
-    env: { ...process.env, PORT: String(PORT), DB_PATH: path.join(dir, 't.db'), UPLOAD_DIR: path.join(dir, 'up'), ADMIN_EMAILS: 'admin@x.test,admin2@x.test' },
+    env: { ...process.env, PORT: String(PORT), DB_PATH: dbFile(), UPLOAD_DIR: path.join(dir, 'up'), ADMIN_EMAILS: 'admin@x.test,admin2@x.test' },
     stdio: 'ignore',
   })
   for (let i = 0; i < 50; i++) {
@@ -75,7 +93,7 @@ before(async () => {
     await new Promise((r) => setTimeout(r, 100))
   }
   adminToken = (await signup('admin@x.test', 'Admin')).token
-  admin2 = await signup('admin2@x.test', 'Admin2') // admins are exempt from the membership rule, so they can chat
+  admin2 = await signup('admin2@x.test', 'Admin2', 'man')
 })
 
 after(async () => {
@@ -123,47 +141,72 @@ describe('blocks', () => {
   })
 
   it('hide members from the wall and connections in both directions', async () => {
-    const a = await activeUser('h1@x.test', 'HideA')
-    const b = await activeUser('h2@x.test', 'HideB')
-    const c = await activeUser('h3@x.test', 'HideC')
-    await match(a, b)
-    assert.ok((await connNames(a)).includes('HideB'))
-    assert.ok((await wallNames(a)).includes('HideC'))
+    const m1 = await activeUser('h1@x.test', 'HideM1')
+    const w1 = await activeWoman('h2@x.test', 'HideW1')
+    const w2 = await activeWoman('h3@x.test', 'HideW2')
+    const m2 = await activeUser('h4@x.test', 'HideM2')
+    await match(m1, 'h1@x.test', w1)
+    assert.ok((await connNames(m1)).includes('HideW1'))
+    assert.ok((await wallNames(m1)).includes('HideW2'))
+    assert.ok((await wallNames(m2)).includes('HideW2'))
 
-    assert.equal((await block(a, b)).status, 200)
-    assert.ok(!(await connNames(a)).includes('HideB'), 'blocker no longer sees the connection')
-    assert.ok(!(await connNames(b)).includes('HideA'), 'blocked member no longer sees the connection')
-    assert.ok(!(await wallNames(b)).includes('HideA'), 'blocked member cannot see the blocker on the wall')
-    assert.ok((await wallNames(c)).includes('HideA'), 'others are unaffected')
+    // man blocks a woman: she leaves his wall only
+    assert.equal((await block(m1, w2)).status, 200)
+    assert.ok(!(await wallNames(m1)).includes('HideW2'), 'blocker does not see blocked on the wall')
+    assert.ok((await wallNames(m2)).includes('HideW2'), 'others are unaffected')
 
-    assert.equal((await block(c, a)).status, 200)
-    assert.ok(!(await wallNames(a)).includes('HideC'), 'blocker does not see blocked on the wall')
-    assert.ok(!(await wallNames(c)).includes('HideA'))
+    // woman blocks a man: she leaves his wall
+    assert.equal((await block(w2, m2)).status, 200)
+    assert.ok(!(await wallNames(m2)).includes('HideW2'), 'blocked member cannot see the blocker on the wall')
+
+    // blocking a connection hides it for both sides
+    assert.equal((await block(m1, w1)).status, 200)
+    assert.ok(!(await connNames(m1)).includes('HideW1'), 'blocker no longer sees the connection')
+    assert.ok(!(await connNames(w1)).includes('HideM1'), 'blocked member no longer sees the connection')
 
     // unblocking restores visibility
-    assert.equal((await call('DELETE', `/blocks/${b.bumpId}`, { token: a.token })).status, 200)
-    assert.ok((await connNames(a)).includes('HideB'))
-    assert.ok((await connNames(b)).includes('HideA'))
+    assert.equal((await call('DELETE', `/blocks/${w1.bumpId}`, { token: m1.token })).status, 200)
+    assert.ok((await connNames(m1)).includes('HideW1'))
+    assert.ok((await connNames(w1)).includes('HideM1'))
+    assert.equal((await call('DELETE', `/blocks/${w2.bumpId}`, { token: m1.token })).status, 200)
+    assert.ok((await wallNames(m1)).includes('HideW2'))
   })
 
-  it('refuse like/skip in either direction without revealing the block', async () => {
-    const a = await activeUser('l1@x.test', 'LikeA')
-    const b = await activeUser('l2@x.test', 'LikeB')
-    const ghost = await call('POST', '/actions', { token: a.token, json: { bumpId: 'NOSUCH00', action: 'like' } })
+  it('refuse requests in either direction without revealing the block', async () => {
+    const m = await activeUser('l1@x.test', 'SkipM')
+    const w = await activeWoman('l2@x.test', 'SkipW')
+    giveCredits(m, 'l1@x.test')
+    const ghost = await call('POST', '/actions', { token: m.token, json: { bumpId: 'NOSUCH00', action: 'skip' } })
     assert.equal(ghost.status, 404)
-    assert.equal((await block(a, b)).status, 200)
-    for (const [from, to] of [[a, b], [b, a]] as const) {
-      for (const action of ['like', 'skip']) {
-        const r = await call('POST', '/actions', { token: from.token, json: { bumpId: to.bumpId, action } })
-        assert.equal(r.status, 404, `${action}`)
-        assert.deepEqual(await json(r), { error: 'not_found' }, 'same body as an unknown member')
-      }
-    }
+    assert.equal((await block(m, w)).status, 200)
+    const req = await sendRequest(m, w)
+    assert.equal(req.status, 404)
+    assert.deepEqual(await json(req), { error: 'not_found' })
+    // woman blocks the man instead
+    assert.equal((await call('DELETE', `/blocks/${w.bumpId}`, { token: m.token })).status, 200)
+    assert.equal((await block(w, m)).status, 200)
+    assert.equal((await sendRequest(m, w)).status, 404)
+    assert.equal((await json(await call('GET', '/me', { token: m.token }))).requestCredits, 5, 'no credit spent')
+  })
+
+  it('a woman inbox hides requests from a man she later blocks', async () => {
+    const m1 = await activeUser('i1@x.test', 'InboxM1')
+    const m2 = await activeUser('i2@x.test', 'InboxM2')
+    const w = await activeWoman('i3@x.test', 'InboxW')
+    giveCredits(m1, 'i1@x.test'); giveCredits(m2, 'i2@x.test')
+    assert.equal((await sendRequest(m1, w)).status, 201)
+    assert.equal((await sendRequest(m2, w)).status, 201)
+    const names = async () => (await json(await call('GET', '/requests/received', { token: w.token }))).map((r: any) => JSON.stringify(r)) as string[]
+    assert.equal((await names()).length, 2)
+    assert.equal((await block(w, m1)).status, 200)
+    const after = await names()
+    assert.equal(after.length, 1)
+    assert.ok(after[0].includes('InboxM2') && !after.join().includes('InboxM1'))
   })
 
   it('refuse messages in either direction but keep history readable', async () => {
-    const m = await activeUser('m1@x.test', 'MsgMember')
-    const conn = await match(admin2, m)
+    const m = await activeWoman('m1@x.test', 'MsgMember')
+    const conn = await match(admin2, 'admin2@x.test', m)
     const send = (u: Account) => call('POST', `/connections/${conn}/messages`, { token: u.token, json: { body: 'hello' } })
     assert.equal((await send(admin2)).status, 200)
 
@@ -297,9 +340,9 @@ describe('admin review', () => {
 
   it('action with suspension makes the member invisible and inert, and lifting restores them', async () => {
     const rep = await activeUser('s1@x.test', 'Reporter')
-    const bad = await activeUser('s2@x.test', 'BadActor')
+    const bad = await activeWoman('s2@x.test', 'BadActor')
     const friend = await activeUser('s3@x.test', 'Friend')
-    const conn = await match(bad, friend)
+    const conn = await match(friend, 's3@x.test', bad)
     assert.ok((await wallNames(rep)).includes('BadActor'))
 
     await report(rep, bad, 'harassment')
@@ -317,23 +360,36 @@ describe('admin review', () => {
     // still logged in and able to read their own data
     assert.equal((await call('GET', '/me', { token: bad.token })).status, 200)
     assert.equal((await call('GET', `/connections/${conn}/messages`, { token: bad.token })).status, 200)
-    // inert: cannot like, and nobody can like them
-    const act = await call('POST', '/actions', { token: bad.token, json: { bumpId: rep.bumpId, action: 'like' } })
-    assert.equal(act.status, 403)
-    assert.equal((await json(act)).error, 'suspended')
-    assert.equal((await call('POST', '/actions', { token: rep.token, json: { bumpId: bad.bumpId, action: 'like' } })).status, 404)
+    // inert: nobody can send them a request
+    giveCredits(rep, 's1@x.test')
+    assert.equal((await sendRequest(rep, bad)).status, 404)
 
     assert.equal((await call('POST', `/admin/suspensions/${bad.bumpId}/lift`, { token: adminToken })).status, 200)
     assert.equal((await call('POST', `/admin/suspensions/${bad.bumpId}/lift`, { token: adminToken })).status, 404, 'nothing left to lift')
     assert.ok((await wallNames(rep)).includes('BadActor'), 'visible again')
-    assert.equal((await call('POST', '/actions', { token: bad.token, json: { bumpId: rep.bumpId, action: 'like' } })).status, 200)
+    assert.equal((await sendRequest(rep, bad)).status, 201)
+  })
+
+  it('a suspended man cannot send a request', async () => {
+    const rep = await activeUser('u1@x.test', 'SusRep')
+    const bad = await activeUser('u2@x.test', 'SusMan')
+    const w = await activeWoman('u3@x.test', 'SusWoman')
+    giveCredits(bad, 'u2@x.test')
+    await report(rep, bad, 'harassment')
+    const id = (await openReports()).find((x) => x.reported.bumpId === bad.bumpId).report.id
+    assert.equal((await call('POST', `/admin/reports/${id}/decision`, { token: adminToken, json: { decision: 'action', note: 'bad', suspend: true } })).status, 200)
+    const r = await sendRequest(bad, w)
+    assert.equal(r.status, 403)
+    assert.equal((await json(r)).error, 'suspended')
+    await call('POST', `/admin/suspensions/${bad.bumpId}/lift`, { token: adminToken })
+    assert.equal((await sendRequest(bad, w)).status, 201)
   })
 
   it('a suspended member cannot send messages', async () => {
     const rep = await activeUser('k1@x.test', 'Rep')
     const sender = admin2
-    const peer = await activeUser('k2@x.test', 'Peer')
-    const conn = await match(sender, peer)
+    const peer = await activeWoman('k2@x.test', 'Peer')
+    const conn = await match(sender, 'admin2@x.test', peer)
     await report(rep, sender, 'spam')
     const id = (await openReports()).find((x) => x.reported.bumpId === sender.bumpId).report.id
     await call('POST', `/admin/reports/${id}/decision`, { token: adminToken, json: { decision: 'action', note: 'spam', suspend: true } })
@@ -346,7 +402,7 @@ describe('admin review', () => {
 
   it('action without suspension leaves the member active', async () => {
     const rep = await activeUser('n1@x.test', 'NRep')
-    const t = await activeUser('n2@x.test', 'NTgt')
+    const t = await activeWoman('n2@x.test', 'NTgt')
     await report(rep, t)
     const id = (await openReports()).find((x) => x.reported.bumpId === t.bumpId).report.id
     assert.equal((await call('POST', `/admin/reports/${id}/decision`, { token: adminToken, json: { decision: 'action', note: 'warned', suspend: false } })).status, 200)

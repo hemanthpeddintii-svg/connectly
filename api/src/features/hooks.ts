@@ -48,14 +48,13 @@ export function composeFilters(filters: Array<(viewerId: string) => SqlFragment 
 }
 
 /** Maps a guard error code to an HTTP status. */
-export const errorStatus = (code: string) => (code === 'not_found' ? 404 : code === 'membership_required' ? 402 : 403)
+export const errorStatus = (code: string) => (code === 'not_found' ? 404 : 403)
 
 /**
- * The single rule for "may this member send a message to that member?": membership first
- * (admins exempt), then every registered messageGuard. Returns an error code or null.
+ * The single rule for "may this member send a message to that member?": every registered messageGuard.
+ * Chat is free once a request is accepted. Returns an error code or null.
  */
 export function checkMessageAllowed(sender: UserRow, otherId: string): string | null {
-  if (sender.role !== 'admin' && (sender.membership_expires_at ?? 0) <= Date.now()) return 'membership_required'
   for (const g of messageGuards) {
     const code = g(sender, otherId)
     if (code) return code
