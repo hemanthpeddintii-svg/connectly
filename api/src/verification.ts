@@ -4,7 +4,7 @@ import { createReadStream, mkdirSync } from 'node:fs'
 import { unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
-import { db, newId } from './db.ts'
+import { audit, db, newId } from './db.ts'
 import { authed, getUser, requireAdmin } from './guards.ts'
 
 export const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR ?? 'uploads')
@@ -171,6 +171,7 @@ export async function verificationRoutes(app: FastifyInstance) {
       if (res.changes === 0) return 'already_decided' as const
       db.prepare('UPDATE users SET status=?, rejection_reason=? WHERE id=?')
         .run(approve ? 'active' : 'rejected', reason, v.user_id)
+      audit(reviewer, approve ? 'verification.approve' : 'verification.reject', v.user_id, { verificationId: v.id, reason })
       return 'ok' as const
     })
     if (outcome === 'not_found') return reply.code(404).send({ error: 'not_found' })

@@ -67,3 +67,13 @@ export function notifyMessage(e: MessageEvent) {
     try { l(e) } catch { /* listeners must not break delivery */ }
   }
 }
+
+/** A request was sent ('sent', recipient is the woman) or accepted ('accepted', recipient is the man). Declines never fire. */
+export type RequestEvent = { kind: 'sent' | 'accepted'; requestId: string; recipientId: string; actorId: string }
+export const requestListeners: Array<(e: RequestEvent) => void> = []
+
+export function notifyRequest(e: RequestEvent) {
+  for (const l of requestListeners) {
+    try { l(e) } catch { /* listeners must not break the request flow */ }
+  }
+}

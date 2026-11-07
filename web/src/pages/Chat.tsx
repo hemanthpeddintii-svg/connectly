@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useConnectionsQuery, useMessagesQuery, useSendMessageMutation } from '../api'
+import { useConnectionsQuery, useMarkReadMutation, useMessagesQuery, useSendMessageMutation } from '../api'
 import MessageAttachment from '../features/attachments/MessageAttachment'
 import AttachmentComposer from '../features/attachments/AttachmentComposer'
 import SafetyMenu from '../features/safety/SafetyMenu'
@@ -16,8 +16,11 @@ export default function Chat() {
   const [send, { isLoading: sending }] = useSendMessageMutation()
   const [text, setText] = useState('')
   const [sendError, setSendError] = useState('')
+  const [markRead] = useMarkReadMutation()
   const end = useRef<HTMLDivElement>(null)
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }) }, [data?.length])
+  // Mark read on open and whenever new messages arrive while the chat is open.
+  useEffect(() => { if (id && data) void markRead(id) }, [id, data?.length, markRead]) // eslint-disable-line react-hooks/exhaustive-deps
   const who = connections?.find((c) => c.id === id)?.profile
 
   async function submit(e: FormEvent) {

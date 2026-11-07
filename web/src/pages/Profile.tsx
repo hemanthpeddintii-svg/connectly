@@ -8,6 +8,7 @@ import { btnPrimary, card, field } from '../ui'
 import Monogram from '../components/Monogram'
 import RealPerson from '../components/Badge'
 import { Loading } from '../components/State'
+import TermsGate from '../features/onboarding/TermsGate'
 import { ChevronIcon } from '../components/icons'
 
 const row = 'flex min-h-14 items-center justify-between rounded-[22px] bg-white px-5 text-[15px] font-semibold'
@@ -27,7 +28,9 @@ export default function Profile() {
     try {
       await update({
         name: String(f.get('name')),
+        city: String(f.get('city')).trim(),
         bio: String(f.get('bio')),
+        lookingFor: String(f.get('lookingFor')).trim(),
         interests: String(f.get('interests')).split(',').map((s) => s.trim()).filter(Boolean),
       }).unwrap()
     } catch { setError('Could not save your profile.') }
@@ -41,20 +44,26 @@ export default function Profile() {
   }
   return (
     <div className="flex flex-col gap-4 pb-4">
+      <TermsGate />
       <h1 className="pt-2 font-display text-[28px] font-semibold leading-tight">My profile</h1>
-      <form key={me.name + me.bio} onSubmit={submit} className={`${card} flex flex-col gap-3`}>
+      <form key={me.name + me.bio + me.city + me.lookingFor} onSubmit={submit} className={`${card} flex flex-col gap-3`}>
         <div className="flex items-center gap-4">
           <Monogram name={me.name} size={64} />
           <div className="flex flex-col gap-1">
             <h2 className="font-display text-xl font-semibold">{me.name}, {me.age}</h2>
+            {me.city && <p className="text-[13px] text-slate">{me.city}</p>}
             {me.status === 'active' && <RealPerson />}
           </div>
         </div>
         <p className="text-[13px] text-slate">Your ID: <code>{me.bumpId}</code> · {me.email}</p>
         <label className="flex flex-col gap-1.5 text-sm font-semibold">Name
           <input name="name" defaultValue={me.name} required className={`${field} font-normal`} /></label>
+        <label className="flex flex-col gap-1.5 text-sm font-semibold">City
+          <input name="city" defaultValue={me.city} maxLength={60} className={`${field} font-normal`} /></label>
         <label className="flex flex-col gap-1.5 text-sm font-semibold">About me
           <textarea name="bio" defaultValue={me.bio} rows={4} maxLength={500} className={`${field} font-normal`} /></label>
+        <label className="flex flex-col gap-1.5 text-sm font-semibold">Looking for
+          <textarea name="lookingFor" defaultValue={me.lookingFor} rows={3} maxLength={300} className={`${field} font-normal`} /></label>
         <label className="flex flex-col gap-1.5 text-sm font-semibold">Interests (comma separated)
           <input name="interests" defaultValue={me.interests.join(', ')} className={`${field} font-normal`} /></label>
         {error && <p role="alert" className="text-sm text-ember-deep">{error}</p>}
@@ -68,6 +77,7 @@ export default function Profile() {
         </>
       )}
       <Link to="/settings" className={row}>Settings<ChevronIcon size={20} /></Link>
+      <Link to="/help" className={row}>Help and support<ChevronIcon size={20} /></Link>
       {me.role === 'admin' && <Link to="/admin" className={row}>Admin<ChevronIcon size={20} /></Link>}
       <button type="button" onClick={logout} className="h-12 rounded-full border border-stone-300 text-base font-semibold">Log out</button>
       <p className="text-center text-[13px] text-slate">Members see your monogram, never a photo.</p>

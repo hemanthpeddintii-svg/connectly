@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify Node >= 24.22.1
+        run: |
+          node -v
+          node -e "const [a,b,c]=process.versions.node.split('.').map(Number); if (a<24 || (a===24 && (b<22 || (b===22 && c<1)))) { console.error('Node 24.22.1+ required, got '+process.version); process.exit(1) }"
+      - run: npm ci
+      - name: Typecheck (api + web)
+        run: npm run typecheck
+      - name: API tests
+        run: npm test -w api
+        env:
+          RATE_LIMIT: 'off'
+      - name: Build web
+        run: npm run build -w web

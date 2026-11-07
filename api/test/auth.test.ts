@@ -45,7 +45,7 @@ const get = (s: Srv, url: string, token?: string) => fetch(s.base + url, { heade
 let n = 0
 const email = () => `u${++n}-${Math.random().toString(36).slice(2, 8)}@x.test`
 async function signup(s: Srv, e = email(), password = PW) {
-  const r = await post(s, '/signup', { email: e, password, name: 'Test', age: 30, gender: 'man' })
+  const r = await post(s, '/signup', { agreeToTerms: true, email: e, password, name: 'Test', age: 30, gender: 'man' })
   assert.equal(r.status, 200, 'signup')
   return { email: e, ...((await r.json()) as { token: string }) }
 }
@@ -82,10 +82,10 @@ after(async () => {
 describe('password policy and headers', () => {
   it('rejects weak, common and short passwords but accepts a good one', async () => {
     for (const password of ['password123', 'Password1', 'aaaaaaaaaa', 'short1!']) {
-      const r = await post(A, '/signup', { email: email(), password, name: 'T', age: 30, gender: 'man' })
+      const r = await post(A, '/signup', { agreeToTerms: true, email: email(), password, name: 'T', age: 30, gender: 'man' })
       assert.equal(r.status, 400, password)
     }
-    const r = await post(A, '/signup', { email: email(), password: 'password123', name: 'T', age: 30, gender: 'man' })
+    const r = await post(A, '/signup', { agreeToTerms: true, email: email(), password: 'password123', name: 'T', age: 30, gender: 'man' })
     assert.ok(JSON.stringify(await r.json()).includes('password_too_common'))
     await signup(A)
   })
@@ -138,7 +138,7 @@ describe('per-IP rate limits', () => {
   })
   it('limits sign-ups per IP', async () => {
     let last = 0
-    for (let i = 0; i < 11; i++) last = (await post(B, '/signup', { email: email(), password: PW, name: 'T', age: 30, gender: 'man' })).status
+    for (let i = 0; i < 11; i++) last = (await post(B, '/signup', { agreeToTerms: true, email: email(), password: PW, name: 'T', age: 30, gender: 'man' })).status
     assert.equal(last, 429)
   })
   it('limits forgot-password requests per IP', async () => {

@@ -1,6 +1,6 @@
 # Connectly screen inventory
 
-Design canvas: https://claude.ai/artifact/S1B2srbD5ZN2wrVU1oUFwi (56 boards). Status as of this writing.
+Design canvas: https://claude.ai/artifact/S1B2srbD5ZN2wrVU1oUFwi (56 boards). Status: updated after the request-flow and phase-2 builds. Everything below is now built in the app (reviewed in a browser: request flow, admin overview, verification case, members, member detail, signup, welcome) EXCEPT where noted here: the designs for Install-the-app and the notification list are still missing; legal text is a DRAFT placeholder; the Chats list has last-message and unread, but a woman only hears about a request by email or push if SMTP and push keys are configured; voice recording, push and the service worker are untested on a real phone.
 
 - **Designed**: a board exists on the canvas (not yet visually reviewed by the team).
 - **App today**: what the running app has. "Old model" means it exists but is built for like/skip/match and time-based membership, so it needs rework for request/accept and request packs.

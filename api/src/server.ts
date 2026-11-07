@@ -14,6 +14,7 @@ import { DUMMY_HASH, clearFailures, lockRemainingMs, passwordSchema, rateLimit, 
 import { verificationRoutes } from './verification.ts'
 import { paymentRoutes } from './payments.ts'
 import { requestRoutes } from './requests.ts'
+import { adminRoutes } from './admin.ts'
 import { featureRoutes } from './features/index.ts'
 import {
   actionGuards, checkMessageAllowed, composeFilters, connectionFilters, errorStatus, notifyMessage, pushToUser, sockets, wallFilters,
@@ -48,6 +49,7 @@ await app.register(verificationRoutes)
 await app.register(paymentRoutes)
 await app.register(featureRoutes)
 await app.register(requestRoutes)
+await app.register(adminRoutes)
 
 // Accounts listed in ADMIN_EMAILS are admins and skip verification.
 for (const email of adminEmails) {
@@ -66,6 +68,9 @@ const signupSchema = z.object({
   age: z.number().int().min(18).max(120),
   bio: z.string().max(500).default(''),
   interests: z.array(z.string().trim().min(1).max(30)).max(12).default([]),
+  city: z.string().trim().max(60).default(''),
+  lookingFor: z.string().trim().max(300).default(''),
+  agreeToTerms: z.literal(true),
 })
 
 app.post('/v0/signup', rateLimit(10, '1 hour'), async (req, reply) => {
@@ -79,10 +84,10 @@ app.post('/v0/signup', rateLimit(10, '1 hour'), async (req, reply) => {
   const id = newId()
   const isAdmin = adminEmails.has(email)
   db.prepare(
-    'INSERT INTO users (id,bump_id,email,password_hash,name,age,bio,interests,gender,status,role,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO users (id,bump_id,email,password_hash,name,age,bio,interests,gender,status,role,created_at,city,looking_for,terms_agreed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
   ).run(
     id, newBumpId(), email, hashPassword(d.password), d.name, d.age, d.bio, JSON.stringify(d.interests), d.gender,
-    isAdmin ? 'active' : 'unverified', isAdmin ? 'admin' : 'user', Date.now(),
+    isAdmin ? 'active' : 'unverified', isAdmin ? 'admin' : 'user', Date.now(), d.city, d.lookingFor, Date.now(),
   )
   const user = getUser(id)!
   return { token: sign(user), user: selfProfile(user) }
@@ -122,6 +127,8 @@ app.patch('/v0/me', authed, async (req, reply) => {
     bio: z.string().max(500).optional(),
     interests: z.array(z.string().trim().min(1).max(30)).max(12).optional(),
     gender: z.enum(['man', 'woman']).optional(),
+    city: z.string().trim().max(60).optional(),
+    lookingFor: z.string().trim().max(300).optional(),
   }).safeParse(req.body)
   if (!body.success) return reply.code(400).send({ error: 'invalid_input' })
   const u = getUser(req.user.sub)
@@ -129,13 +136,22 @@ app.patch('/v0/me', authed, async (req, reply) => {
   // Gender decides which side of a request a member is on, so it can be set once (accounts that predate it) and never switched.
   if (body.data.gender && u.gender && body.data.gender !== u.gender) return reply.code(409).send({ error: 'gender_locked' })
   if (body.data.gender && !u.gender) db.prepare('UPDATE users SET gender = ? WHERE id = ?').run(body.data.gender, u.id)
-  db.prepare('UPDATE users SET name=?, bio=?, interests=? WHERE id=?').run(
+  db.prepare('UPDATE users SET name=?, bio=?, interests=?, city=?, looking_for=? WHERE id=?').run(
     body.data.name ?? u.name,
     body.data.bio ?? u.bio,
     body.data.interests ? JSON.stringify(body.data.interests) : u.interests,
+    body.data.city ?? u.city,
+    body.data.lookingFor ?? u.looking_for,
     u.id,
   )
   return selfProfile(getUser(u.id)!)
+})
+
+app.post('/v0/me/agree-terms', authed, async (req, reply) => {
+  const u = getUser(req.user.sub)
+  if (!u) return reply.code(401).send({ error: 'unauthorized' })
+  db.prepare('UPDATE users SET terms_agreed_at = COALESCE(terms_agreed_at, ?) WHERE id = ?').run(Date.now(), u.id)
+  return { termsAgreed: true }
 })
 
 // ---- wall & actions -----------------------------------------------------
@@ -168,15 +184,44 @@ app.post('/v0/actions', active, async (req, reply) => {
 // ---- connections & chat -------------------------------------------------
 app.get('/v0/connections', active, async (req) => {
   const extra = composeFilters(connectionFilters, req.user.sub)
+  // Columns of c and lm are aliased: u.* also carries id and created_at, and duplicate names would silently return the wrong id.
   const rows = db.prepare(`
-    SELECT c.id AS connection_id, c.created_at AS connected_at, u.* FROM connections c
+    SELECT c.id AS connection_id, c.created_at AS connected_at, u.*,
+      lm.sender_id AS lm_sender, lm.kind AS lm_kind, lm.body AS lm_body, lm.created_at AS lm_at,
+      (SELECT COUNT(*) FROM messages m WHERE m.connection_id = c.id AND m.sender_id != ?
+         AND m.created_at > COALESCE((SELECT r.last_read_at FROM message_reads r WHERE r.connection_id = c.id AND r.user_id = ?), 0)) AS unread_count
+    FROM connections c
     JOIN users u ON u.id = CASE WHEN c.a_id = ? THEN c.b_id ELSE c.a_id END
-    WHERE (c.a_id = ? OR c.b_id = ?)${extra.sql} ORDER BY c.created_at DESC`).all(req.user.sub, req.user.sub, req.user.sub, ...extra.params) as any[]
-  return rows.map((r) => ({ id: r.connection_id as string, createdAt: r.connected_at as number, profile: publicProfile(r) }))
+    LEFT JOIN messages lm ON lm.id = (SELECT m2.id FROM messages m2 WHERE m2.connection_id = c.id ORDER BY m2.created_at DESC, m2.rowid DESC LIMIT 1)
+    WHERE (c.a_id = ? OR c.b_id = ?)${extra.sql}
+    ORDER BY COALESCE(lm.created_at, c.created_at) DESC`).all(
+    req.user.sub, req.user.sub, req.user.sub, req.user.sub, req.user.sub, ...extra.params) as any[]
+  return rows.map((r) => ({
+    id: r.connection_id as string,
+    createdAt: r.connected_at as number,
+    profile: publicProfile(r),
+    lastMessage: r.lm_at == null ? null : {
+      preview: r.lm_kind === 'voice' ? 'Voice message' : r.lm_kind === 'image' ? 'Photo' : String(r.lm_body).slice(0, 140),
+      kind: r.lm_kind as 'text' | 'voice' | 'image',
+      mine: r.lm_sender === req.user.sub,
+      createdAt: r.lm_at as number,
+    },
+    unread: r.unread_count as number,
+  }))
 })
 
 const isMember = (connId: string, userId: string) =>
   db.prepare('SELECT a_id, b_id FROM connections WHERE id=?').get(connId) as { a_id: string; b_id: string } | undefined
+
+app.post('/v0/connections/:id/read', active, async (req, reply) => {
+  const { id } = req.params as { id: string }
+  const c = isMember(id, req.user.sub)
+  if (!c || (c.a_id !== req.user.sub && c.b_id !== req.user.sub)) return reply.code(404).send({ error: 'not_found' })
+  db.prepare(
+    'INSERT INTO message_reads (connection_id,user_id,last_read_at) VALUES (?,?,?) ON CONFLICT(connection_id,user_id) DO UPDATE SET last_read_at=excluded.last_read_at',
+  ).run(id, req.user.sub, Date.now())
+  return { ok: true }
+})
 
 app.get('/v0/connections/:id/messages', active, async (req, reply) => {
   const { id } = req.params as { id: string }

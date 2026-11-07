@@ -24,7 +24,7 @@ async function call(method: string, url: string, opts: { token?: string; json?: 
 }
 
 async function signup(email: string, name = 'Test', gender: 'man' | 'woman' = 'man') {
-  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
+  const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
   assert.equal(r.status, 200)
   return (await r.json()) as { token: string; user: { bumpId: string; status: string; role: string } }
 }

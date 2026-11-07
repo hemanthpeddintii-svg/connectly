@@ -35,7 +35,7 @@ let counter = 0
 
 async function signup(name: string, gender: Gender = 'woman'): Promise<User> {
   const email = `acct${++counter}-${Math.random().toString(36).slice(2, 8)}@x.test`
-  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
+  const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
   assert.equal(r.status, 200)
   const j = (await r.json()) as { token: string; user: { bumpId: string } }
   const row = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as { id: string }
@@ -96,7 +96,7 @@ before(async () => {
   db = (await import('../src/db.ts')).db
   db.exec('PRAGMA busy_timeout = 5000')
   purge = (await import('../src/scripts/purge-deleted-accounts.ts')).purgeDueAccounts
-  const r = await call('POST', '/signup', { json: { email: 'admin@x.test', password: 'Tr0ub4dor&3xKq', name: 'Admin', age: 40, gender: 'man' } })
+  const r = await call('POST', '/signup', { json: { agreeToTerms: true, email: 'admin@x.test', password: 'Tr0ub4dor&3xKq', name: 'Admin', age: 40, gender: 'man' } })
   assert.equal(r.status, 200)
 })
 

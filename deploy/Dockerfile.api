@@ -1,0 +1,19 @@
+FROM node:24-slim
+ENV NODE_ENV=production
+WORKDIR /app
+# Workspace manifests first so the dependency layer caches.
+COPY package.json package-lock.json ./
+COPY api/package.json api/package.json
+COPY web/package.json web/package.json
+RUN npm ci --omit=dev -w api
+COPY api/src api/src
+# Data lives on a volume; the API reads DB_PATH / UPLOAD_DIR.
+ENV DB_PATH=/data/connectly.db UPLOAD_DIR=/data/uploads PORT=3001
+RUN mkdir -p /data/uploads && chown -R node:node /data /app
+USER node
+WORKDIR /app/api
+VOLUME ["/data"]
+EXPOSE 3001
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "src/server.ts"]

@@ -26,7 +26,7 @@ async function call(method: string, url: string, opts: { token?: string; json?: 
 type Session = { token: string; user: { bumpId: string } }
 
 async function signup(email: string, name: string, age = 30, interests: string[] = [], gender: 'man' | 'woman' = 'man') {
-  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age, interests, gender } })
+  const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: 'Tr0ub4dor&3xKq', name, age, interests, gender } })
   assert.equal(r.status, 200)
   return (await r.json()) as Session
 }

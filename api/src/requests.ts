@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db, newId, publicProfile, type UserRow } from './db.ts'
 import { authed, getUser, requireActive } from './guards.ts'
-import { actionGuards, composeFilters, connectionFilters, errorStatus, pushToUser } from './features/hooks.ts'
+import { actionGuards, composeFilters, connectionFilters, errorStatus, notifyRequest, pushToUser } from './features/hooks.ts'
 import { tx } from './verification.ts'
 
 // A request is one introduction: a man writes a short note to a woman; she accepts (which opens a chat) or says not now.
@@ -58,6 +58,7 @@ export async function requestRoutes(app: FastifyInstance) {
     if (result === 'no_requests_left') return reply.code(402).send({ error: result })
 
     pushToUser(target.id, { type: 'request', requestId: result })
+    notifyRequest({ kind: 'sent', requestId: result, recipientId: target.id, actorId: me.id })
     return reply.code(201).send({ id: result, creditsLeft: getUser(me.id)!.request_credits })
   })
 
@@ -138,6 +139,7 @@ export async function requestRoutes(app: FastifyInstance) {
       type: 'request_update', requestId: r.id, status: outcome.status,
       ...('connectionId' in outcome ? { connectionId: outcome.connectionId } : {}),
     })
+    if (outcome.status === 'accepted') notifyRequest({ kind: 'accepted', requestId: r.id, recipientId: r.from_id, actorId: me.id })
     return outcome
   })
 }

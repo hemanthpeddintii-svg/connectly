@@ -89,6 +89,37 @@ if (!userCols.includes('token_version')) db.exec('ALTER TABLE users ADD COLUMN t
 if (!userCols.includes('gender')) db.exec('ALTER TABLE users ADD COLUMN gender TEXT')
 if (!userCols.includes('request_credits')) db.exec('ALTER TABLE users ADD COLUMN request_credits INTEGER NOT NULL DEFAULT 0')
 if (!userCols.includes('rejection_reason')) db.exec('ALTER TABLE users ADD COLUMN rejection_reason TEXT')
+if (!userCols.includes('city')) db.exec("ALTER TABLE users ADD COLUMN city TEXT NOT NULL DEFAULT ''")
+if (!userCols.includes('looking_for')) db.exec("ALTER TABLE users ADD COLUMN looking_for TEXT NOT NULL DEFAULT ''")
+if (!userCols.includes('terms_agreed_at')) db.exec('ALTER TABLE users ADD COLUMN terms_agreed_at INTEGER')
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS message_reads (
+    connection_id TEXT NOT NULL REFERENCES connections(id),
+    user_id TEXT NOT NULL REFERENCES users(id),
+    last_read_at INTEGER NOT NULL,
+    PRIMARY KEY (connection_id, user_id)
+  );
+  CREATE TABLE IF NOT EXISTS admin_audit (
+    id TEXT PRIMARY KEY,
+    admin_id TEXT NOT NULL REFERENCES users(id),
+    action TEXT NOT NULL,
+    target_user_id TEXT REFERENCES users(id),
+    detail TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_admin_audit_target ON admin_audit(target_user_id, created_at);
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+`)
+
+/** Records an admin action. Call inside the same transaction as the change it describes. */
+export function audit(adminId: string, action: string, targetUserId: string | null, detail: Record<string, unknown> = {}) {
+  db.prepare('INSERT INTO admin_audit (id,admin_id,action,target_user_id,detail,created_at) VALUES (?,?,?,?,?,?)')
+    .run(newId(), adminId, action, targetUserId, JSON.stringify(detail), Date.now())
+}
 
 const payCols = (db.prepare('PRAGMA table_info(payments)').all() as { name: string }[]).map((c) => c.name)
 if (!payCols.includes('credits')) db.exec('ALTER TABLE payments ADD COLUMN credits INTEGER NOT NULL DEFAULT 0')
@@ -127,6 +158,9 @@ export type UserRow = {
   membership_expires_at: number | null
   gender: 'man' | 'woman' | null
   request_credits: number
+  city: string
+  looking_for: string
+  terms_agreed_at: number | null
   token_version: number
   created_at: number
 }
@@ -156,6 +190,8 @@ export function publicProfile(u: UserRow) {
     age: u.age,
     bio: u.bio,
     interests: JSON.parse(u.interests) as string[],
+    city: u.city ?? '',
+    lookingFor: u.looking_for ?? '',
   }
 }
 
@@ -169,5 +205,6 @@ export function selfProfile(u: UserRow) {
     rejectionReason: u.status === 'rejected' ? u.rejection_reason : null,
     gender: u.gender,
     requestCredits: u.request_credits,
+    termsAgreed: u.terms_agreed_at != null,
   }
 }

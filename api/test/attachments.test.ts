@@ -43,7 +43,7 @@ type Gender = 'man' | 'woman'
 type Account = { token: string; user: { bumpId: string }; email: string; gender: Gender }
 
 async function signup(email: string, name: string, gender: Gender = 'woman') {
-  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
+  const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
   assert.equal(r.status, 200)
   return { ...((await r.json()) as Omit<Account, 'email' | 'gender'>), email, gender } as Account
 }

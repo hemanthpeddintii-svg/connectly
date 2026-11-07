@@ -6,6 +6,7 @@ import { db, newId } from '../db.ts'
 import { authed } from '../guards.ts'
 import { tx } from '../verification.ts'
 import { messageListeners, sockets, type MessageEvent } from './hooks.ts'
+import { notifyRoutes } from '../notify.ts'
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -130,15 +131,23 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   }
 }
 
+/** Sends a generic push (title/body/url are caller-supplied and must hold no personal data) to all of a member's subscriptions. Never throws. */
+export async function sendPushToUser(userId: string, title: string, body: string, url: string): Promise<void> {
+  await pushPayloadToUser(userId, JSON.stringify({ title, body, data: { url } }))
+}
+
 /** Sends a content-free push to every subscription of an offline recipient. Never throws. */
 export async function deliverMessagePush(e: MessageEvent): Promise<void> {
+  if (sockets.get(e.recipientId)?.size) return
+  await pushPayloadToUser(e.recipientId, PAYLOAD(e.connectionId))
+}
+
+async function pushPayloadToUser(userId: string, payload: string): Promise<void> {
   try {
     if (!sender) return
-    if (sockets.get(e.recipientId)?.size) return
-    const subs = db.prepare('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(e.recipientId) as SubscriptionRow[]
+    const subs = db.prepare('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(userId) as SubscriptionRow[]
     if (!subs.length) return
     const send = sender
-    const payload = PAYLOAD(e.connectionId)
     await Promise.all(subs.map(async (s) => {
       try {
         await withTimeout(Promise.resolve().then(() => send({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload)), SEND_TIMEOUT_MS)
@@ -160,6 +169,7 @@ export async function deliverMessagePush(e: MessageEvent): Promise<void> {
 // ---- routes ---------------------------------------------------------------
 export async function pushRoutes(app: FastifyInstance) {
   log = app.log
+  await app.register(notifyRoutes)
   messageListeners.push((e) => { void deliverMessagePush(e) })
 
   app.get('/v0/push/config', authed, async () => ({ enabled: vapid !== null, publicKey: vapid?.publicKey ?? null }))

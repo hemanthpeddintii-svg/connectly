@@ -1,12 +1,12 @@
 import { createApi, fetchBaseQuery, type BaseQueryFn, type FetchArgs, type FetchBaseQueryError } from '@reduxjs/toolkit/query/react'
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
 
-export type Profile = { bumpId: string; name: string; age: number; bio: string; interests: string[] }
+export type Profile = { bumpId: string; name: string; age: number; bio: string; interests: string[]; city: string; lookingFor: string }
 export type UserStatus = 'unverified' | 'pending' | 'active' | 'rejected' | 'deleted'
 export type Gender = 'man' | 'woman'
 export type Me = Profile & {
   email: string; status: UserStatus; role: 'user' | 'admin'; rejectionReason: string | null
-  gender: Gender | null; requestCredits: number
+  gender: Gender | null; requestCredits: number; termsAgreed: boolean
 }
 export type VerificationStatus = 'pending' | 'approved' | 'rejected'
 export type AdminVerification = {
@@ -20,7 +20,8 @@ export type Payment = {
   status: VerificationStatus; reason: string | null; createdAt: number; reviewedAt: number | null
 }
 export type AdminPayment = Payment & { user: { bumpId: string; name: string; email: string } }
-export type Connection = { id: string; createdAt: number; profile: Profile }
+export type LastMessage = { preview: string; kind: 'text' | 'voice' | 'image'; mine: boolean; createdAt: number }
+export type Connection = { id: string; createdAt: number; profile: Profile; lastMessage: LastMessage | null; unread: number }
 export type RequestStatus = 'pending' | 'accepted' | 'declined'
 export type ReceivedRequest = { id: string; status: RequestStatus; note: string; createdAt: number; from: Profile }
 export type SentRequest = {
@@ -95,14 +96,22 @@ export const api = createApi({
     logoutAll: b.mutation<{ ok: true }, void>({
       query: () => ({ url: 'logout-all', method: 'POST' }),
     }),
-    signup: b.mutation<AuthResult, { email: string; password: string; name: string; age: number; gender: Gender; bio?: string; interests?: string[] }>({
+    signup: b.mutation<AuthResult, { email: string; password: string; name: string; age: number; gender: Gender; agreeToTerms: true; city?: string; lookingFor?: string; bio?: string; interests?: string[] }>({
       query: (body) => ({ url: 'signup', method: 'POST', body }),
     }),
     me: b.query<Me, void>({ query: () => 'me', providesTags: ['Me'] }),
     // gender is accepted only while the account has none (legacy accounts).
-    updateMe: b.mutation<Me, Partial<Pick<Me, 'name' | 'bio' | 'interests'>> & { gender?: Gender }>({
+    updateMe: b.mutation<Me, Partial<Pick<Me, 'name' | 'bio' | 'interests' | 'city' | 'lookingFor'>> & { gender?: Gender }>({
       query: (body) => ({ url: 'me', method: 'PATCH', body }),
       invalidatesTags: ['Me'],
+    }),
+    agreeTerms: b.mutation<{ termsAgreed: true }, void>({
+      query: () => ({ url: 'me/agree-terms', method: 'POST' }),
+      invalidatesTags: ['Me'],
+    }),
+    markRead: b.mutation<{ ok: true }, string>({
+      query: (id) => ({ url: `connections/${id}/read`, method: 'POST' }),
+      invalidatesTags: ['Connections'],
     }),
     submitVerification: b.mutation<{ status: 'pending' }, FormData>({
       query: (body) => ({ url: 'verification', method: 'POST', body }),
@@ -162,5 +171,5 @@ export const api = createApi({
 
 export const {
   useLoginMutation, useSignupMutation, useForgotPasswordMutation, useResetPasswordMutation, useChangePasswordMutation, useLogoutAllMutation, useMeQuery, useUpdateMeMutation, useWallQuery,
-  useSkipMutation, useSendRequestMutation, useReceivedRequestsQuery, useSentRequestsQuery, useDecideRequestMutation, useConnectionsQuery, useSubmitVerificationMutation, usePlansQuery, useMyPaymentsQuery, useSubmitPaymentMutation, useAdminPaymentsQuery, useDecidePaymentMutation, useAdminVerificationsQuery, useDecideVerificationMutation, useMessagesQuery, useSendMessageMutation,
+  useSkipMutation, useSendRequestMutation, useReceivedRequestsQuery, useSentRequestsQuery, useDecideRequestMutation, useConnectionsQuery, useSubmitVerificationMutation, usePlansQuery, useMyPaymentsQuery, useSubmitPaymentMutation, useAdminPaymentsQuery, useDecidePaymentMutation, useAdminVerificationsQuery, useDecideVerificationMutation, useMessagesQuery, useSendMessageMutation, useAgreeTermsMutation, useMarkReadMutation,
 } = api

@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useMeQuery, useSubmitVerificationMutation } from '../api'
+import { btnPrimary, field as fieldCls } from '../ui'
+import { Loading } from '../components/State'
+import TermsGate from '../features/onboarding/TermsGate'
 
 const MAX_SELFIE = 5 * 1024 * 1024
 const MAX_VOICE = 10 * 1024 * 1024
@@ -10,14 +13,27 @@ export default function Verify() {
   const { data: me } = useMeQuery(undefined, { pollingInterval: 15000 })
   const [submit, { isLoading }] = useSubmitVerificationMutation()
   const [error, setError] = useState('')
-  if (!me) return <p className="text-stone-500">Loading…</p>
+  if (!me) return <Loading />
   if (me.status === 'active') return <Navigate to="/wall" replace />
 
   if (me.status === 'pending') {
     return (
-      <div role="status" className="rounded-xl border border-stone-200 bg-white p-5">
-        <h2 className="text-lg font-semibold">Under review</h2>
-        <p className="mt-1 text-stone-600">We're checking your selfie and voice clip. This page updates when you're approved.</p>
+      <div className="flex flex-col gap-4 pb-4">
+        <TermsGate />
+        <h1 className="font-display text-[28px] font-semibold leading-tight">The door is ajar.</h1>
+        <p role="status" className="text-[15px] text-slate">Thanks for sending your selfie and voice clip. Our team is taking a careful look before anyone else meets you.</p>
+        <section className="rounded-3xl bg-white p-5">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">What we're checking</h2>
+          <ul className="mt-2 list-disc pl-5 text-[15px]">
+            <li>Your selfie shows a clear face, and it's really you</li>
+            <li>Your voice clip is a real, live voice</li>
+            <li>Your details match, and you're 18 or over</li>
+          </ul>
+        </section>
+        <section className="rounded-3xl bg-white p-5">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">What happens next</h2>
+          <p className="mt-2 text-[15px] text-slate">We'll tell you the result right here. Once approved, you'll get a "Real person" badge and the community opens. If we need another try, we'll say exactly why. Nothing for you to do, and you can close the app.</p>
+        </section>
       </div>
     )
   }
@@ -45,28 +61,43 @@ export default function Verify() {
     }
   }
 
-  const field = 'block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-stone-100 file:px-3 file:py-1'
+  const rejected = me.status === 'rejected'
+  const fileField = `${fieldCls} file:mr-3 file:rounded-full file:border-0 file:bg-mist file:px-3 file:py-1`
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4 pb-4">
+      <TermsGate />
       <div>
-        <h2 className="text-lg font-semibold">Verify your profile</h2>
-        <p className="text-stone-600">Add a clear selfie and a short voice clip so we know you're real. Only our review team can see them.</p>
-      </div>
-      {me.status === 'rejected' && (
-        <p role="alert" className="rounded-md bg-red-50 p-3 text-red-800">
-          Your last submission wasn't approved{me.rejectionReason ? `: ${me.rejectionReason}` : '.'} You can try again.
+        <h1 className="font-display text-[28px] font-semibold leading-tight">{rejected ? "We couldn't approve this one" : 'Verify your profile'}</h1>
+        <p className="mt-1 text-[15px] text-slate">
+          {rejected ? "That's okay, it happens. Nothing is wrong with your account. Here's what our team saw, and how to fix it."
+            : "Add a clear selfie and a short voice clip so we know you're real. Only our review team can see them."}
         </p>
+      </div>
+      {rejected && (
+        <>
+          <div role="alert" className="rounded-3xl bg-white p-5">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">Note from the review team</h2>
+            <p className="mt-1 text-base font-semibold">{me.rejectionReason || 'No reason was given.'}</p>
+          </div>
+          <div className="rounded-3xl bg-white p-5 text-[15px]">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">For a better selfie</h2>
+            <ul className="mt-1 list-disc pl-5"><li>Face the light, so your face isn't in shadow</li><li>No sunglasses, hat or filters. Just you</li><li>Hold the phone steady, at eye level</li></ul>
+            <h2 className="mt-3 text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">For a better voice clip</h2>
+            <ul className="mt-1 list-disc pl-5"><li>Find a quiet spot, away from music and traffic</li><li>Say hello in your own words, a few clear sentences</li></ul>
+          </div>
+        </>
       )}
-      <label className="flex flex-col gap-1 text-sm font-medium">Selfie
-        <input name="selfie" type="file" accept="image/jpeg,image/png,image/webp" capture="user" required className={field} />
+      <label className="flex flex-col gap-1.5 text-sm font-semibold">Selfie
+        <input name="selfie" type="file" accept="image/jpeg,image/png,image/webp" capture="user" required className={fileField} />
       </label>
-      <label className="flex flex-col gap-1 text-sm font-medium">Voice clip
-        <input name="voice" type="file" accept="audio/*" required className={field} />
+      <label className="flex flex-col gap-1.5 text-sm font-semibold">Voice clip
+        <input name="voice" type="file" accept="audio/*" required className={fileField} />
       </label>
-      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-      <button disabled={isLoading} className="self-start rounded-md bg-stone-900 px-4 py-2 text-white disabled:opacity-50">
-        {isLoading ? 'Uploading…' : 'Submit for review'}
+      {error && <p role="alert" className="text-sm text-ember-deep">{error}</p>}
+      <button disabled={isLoading} className={btnPrimary}>
+        {isLoading ? 'Uploading…' : rejected ? 'Try again' : 'Submit for review'}
       </button>
+      <p className="text-center text-[13px] text-slate">Your selfie and clip are only ever seen by our review team.</p>
     </form>
   )
 }

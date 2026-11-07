@@ -5,9 +5,9 @@ import { writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { z } from 'zod'
-import { db, newId } from './db.ts'
+import { audit, db, newId } from './db.ts'
 import { authed, getUser, requireActive, requireAdmin } from './guards.ts'
-import { PLANS, getPlan, paymentInstructions } from './plans.ts'
+import { getPlan, getPlans, paymentInstructions } from './plans.ts'
 import { UPLOAD_DIR, removeQuietly, sniffImage, tx } from './verification.ts'
 
 const MAX_PROOF = 5 * 1024 * 1024
@@ -30,7 +30,7 @@ export async function paymentRoutes(app: FastifyInstance) {
 
   app.get('/v0/membership/plans', member, async (req, reply) => {
     if (notMan(req.user.sub)) return reply.code(403).send({ error: 'not_applicable' })
-    return { plans: PLANS, payment: paymentInstructions() }
+    return { plans: getPlans(), payment: paymentInstructions() }
   })
 
   app.get('/v0/payments/mine', member, async (req) => {
@@ -142,6 +142,10 @@ export async function paymentRoutes(app: FastifyInstance) {
       if (res.changes === 0) return 'already_decided' as const
       // Approval adds the pack's requests to the member's balance, in the same transaction as the decision.
       if (approve) db.prepare('UPDATE users SET request_credits = request_credits + ? WHERE id = ?').run(p.credits, p.user_id)
+      audit(req.user.sub, approve ? 'payment.approve' : 'payment.reject', p.user_id, {
+        paymentId: p.id, planId: p.plan_id, requests: p.credits, amountPaise: p.amount_paise,
+        ...(body.data.decision === 'reject' ? { reason: body.data.reason } : {}),
+      })
       return 'ok' as const
     })
     if (outcome === 'not_found') return reply.code(404).send({ error: 'not_found' })

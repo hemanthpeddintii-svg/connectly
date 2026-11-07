@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { db, newId, type UserRow } from '../db.ts'
+import { audit, db, newId, type UserRow } from '../db.ts'
 import { authed, requireActive, requireAdmin } from '../guards.ts'
 import { tx } from '../verification.ts'
 import { actionGuards, connectionFilters, messageGuards, wallFilters } from './hooks.ts'
@@ -186,10 +186,12 @@ export async function safetyRoutes(app: FastifyInstance) {
       const res = db.prepare("UPDATE reports SET status=?, note=?, reviewed_by=?, reviewed_at=? WHERE id=? AND status='open'")
         .run(d.decision === 'action' ? 'actioned' : 'dismissed', d.note || null, reviewer, Date.now(), id.data)
       if (res.changes === 0) return 'already_decided' as const
-      if (d.decision === 'action' && d.suspend) {
+      const suspend = d.decision === 'action' && d.suspend
+      if (suspend) {
         db.prepare('INSERT OR IGNORE INTO suspensions (user_id, reason, created_by, created_at) VALUES (?,?,?,?)')
           .run(r.reported_id, d.note, reviewer, Date.now())
       }
+      audit(reviewer, d.decision === 'action' ? 'report.actioned' : 'report.dismissed', r.reported_id, { reportId: id.data, note: d.note ?? null, suspended: suspend })
       return 'ok' as const
     })
     if (outcome === 'not_found') return reply.code(404).send({ error: 'not_found' })
@@ -200,8 +202,14 @@ export async function safetyRoutes(app: FastifyInstance) {
   app.post('/v0/admin/suspensions/:bumpId/lift', admin, async (req, reply) => {
     const p = z.object({ bumpId: z.string().min(1).max(32) }).safeParse(req.params)
     if (!p.success) return reply.code(400).send({ error: 'invalid_input' })
-    const res = db.prepare('DELETE FROM suspensions WHERE user_id = (SELECT id FROM users WHERE bump_id = ?)').run(p.data.bumpId)
-    if (res.changes === 0) return reply.code(404).send({ error: 'not_found' })
+    const target = db.prepare('SELECT id FROM users WHERE bump_id = ?').get(p.data.bumpId) as { id: string } | undefined
+    const lifted = tx(() => {
+      if (!target) return false
+      if (db.prepare('DELETE FROM suspensions WHERE user_id = ?').run(target.id).changes === 0) return false
+      audit(req.user.sub, 'suspension.lifted', target.id)
+      return true
+    })
+    if (!lifted) return reply.code(404).send({ error: 'not_found' })
     return { ok: true }
   })
 }

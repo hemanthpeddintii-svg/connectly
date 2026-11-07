@@ -1,0 +1,28 @@
+# Run from the repo root:  docker compose -f deploy/docker-compose.yml --env-file deploy/.env.production up -d --build
+# TLS: this stack serves plain HTTP on port 80. Terminate HTTPS in front of it (Caddy on the host,
+# Cloudflare, or your cloud load balancer) and set TRUST_PROXY=true. See docs/DEPLOY.md.
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    env_file: .env.production
+    restart: unless-stopped
+    volumes:
+      - connectly-data:/data
+    ports:
+      - "80:80"   # published here because web shares this container's network namespace
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    restart: unless-stopped
+    # The API binds 127.0.0.1 only, so nginx must live in the same network namespace.
+    network_mode: "service:api"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  connectly-data:

@@ -1,0 +1,5 @@
+# Install with: crontab -e   (as the user that can read the Docker volume, e.g. root)
+# Adjust paths. Backups at 02:30 UTC, purge of accounts past the 30-day deletion grace at 03:10.
+30 2 * * * DB_PATH=/var/lib/docker/volumes/deploy_connectly-data/_data/connectly.db UPLOAD_DIR=/var/lib/docker/volumes/deploy_connectly-data/_data/uploads BACKUP_DIR=/srv/connectly-backups KEEP=14 /opt/connectly/scripts/backup.sh >> /var/log/connectly-backup.log 2>&1
+10 3 * * * cd /opt/connectly && docker compose -f deploy/docker-compose.yml --env-file deploy/.env.production exec -T api node src/scripts/purge-deleted-accounts.ts >> /var/log/connectly-purge.log 2>&1
+# Copy /srv/connectly-backups OFF the server too (rclone/rsync to another provider).

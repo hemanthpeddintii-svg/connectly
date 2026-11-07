@@ -42,7 +42,7 @@ const client = (port: number) => {
     return fetch(base + url, { method, headers, body: opts.json === undefined ? undefined : JSON.stringify(opts.json) })
   }
   const signup = async (email: string) => {
-    const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name: 'Test', age: 30, gender: 'man' } })
+    const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: 'Tr0ub4dor&3xKq', name: 'Test', age: 30, gender: 'man' } })
     assert.equal(r.status, 200)
     return ((await r.json()) as { token: string }).token
   }

@@ -39,9 +39,10 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
             name: String(f.get('name')),
             age: Number(f.get('age')),
             gender: f.get('joining-as') as Gender,
+            agreeToTerms: true,
           }).unwrap()
       dispatch(authSlice.actions.setToken(res.token))
-      nav('/wall', { replace: true })
+      nav(mode === 'signup' ? '/setup' : '/wall', { replace: true })
     } catch (err) {
       setError(authErrorMessage(err))
     }
@@ -77,7 +78,7 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
             <JoiningAs />
             <label className="flex cursor-pointer items-start gap-3 text-[13px] leading-snug text-slate">
               <input type="checkbox" required className="mt-0.5 h-5 w-5 flex-none accent-ink" />
-              <span>I'm 18 or over and agree to the community values and terms.</span>
+              <span>I'm 18 or over and agree to the <Link className="font-semibold text-ink underline" to="/values">community values</Link> and <Link className="font-semibold text-ink underline" to="/legal/terms">terms</Link>.</span>
             </label>
           </>
         )}

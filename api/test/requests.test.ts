@@ -32,7 +32,7 @@ const j = async (r: Response) => (await r.json()) as any
 let n = 0
 async function signup(gender: 'man' | 'woman', name = 'Test'): Promise<Member> {
   const email = `m${++n}-${Math.random().toString(36).slice(2, 7)}@x.test`
-  const r = await call('POST', '/signup', { json: { email, password: PW, name, age: 30, gender, interests: ['jazz'] } })
+  const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: PW, name, age: 30, gender, interests: ['jazz'] } })
   assert.equal(r.status, 200, 'signup')
   const b = await j(r)
   return { email, token: b.token, bumpId: b.user.bumpId, gender }
@@ -42,7 +42,7 @@ async function signup(gender: 'man' | 'woman', name = 'Test'): Promise<Member> {
 async function adminToken() {
   const login = await call('POST', '/login', { json: { email: 'admin@x.test', password: PW } })
   if (login.status === 200) return (await j(login)).token as string
-  const created = await call('POST', '/signup', { json: { email: 'admin@x.test', password: PW, name: 'Admin', age: 30, gender: 'man' } })
+  const created = await call('POST', '/signup', { json: { agreeToTerms: true, email: 'admin@x.test', password: PW, name: 'Admin', age: 30, gender: 'man' } })
   assert.equal(created.status, 200, 'admin signup')
   return (await j(created)).token as string
 }
@@ -93,7 +93,7 @@ after(async () => {
 
 describe('gender and the community list', () => {
   it('signup requires a gender and /me reports it with a zero balance', async () => {
-    const r = await call('POST', '/signup', { json: { email: 'nog@x.test', password: PW, name: 'N', age: 30 } })
+    const r = await call('POST', '/signup', { json: { agreeToTerms: true, email: 'nog@x.test', password: PW, name: 'N', age: 30 } })
     assert.equal(r.status, 400)
     const m = await signup('woman')
     const me = await j(await call('GET', '/me', { token: m.token }))

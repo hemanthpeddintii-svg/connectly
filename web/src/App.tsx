@@ -22,6 +22,14 @@ import Membership from './pages/Membership'
 import Settings from './pages/Settings'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
+import Welcome from './pages/Welcome'
+import Values from './pages/Values'
+import ProfileSetup from './pages/ProfileSetup'
+import Guidelines from './pages/Guidelines'
+import Help from './pages/Help'
+import Legal from './pages/Legal'
+import NotificationSettings from './pages/NotificationSettings'
+import TermsGate from './features/onboarding/TermsGate'
 
 // Screens that take over the page: no tab bar, and the chat and "Come in" screens also skip the page padding.
 const noTabs = /^\/(request|accepted|membership)(\/|$)|^\/connections\/[^/]+/
@@ -42,7 +50,7 @@ function Shell() {
     }
   }, [error, me?.status, dispatch])
 
-  if (!token) return <Navigate to="/login" replace />
+  if (!token) return <Navigate to="/welcome" replace />
   if (!me) {
     return error
       ? <p role="alert" className="p-6 text-slate">Couldn't load your account. <button className="underline" onClick={refetch}>Try again</button></p>
@@ -50,14 +58,19 @@ function Shell() {
   }
   if (me.gender === null) return <GenderChooser />
 
-  // Unverified members can only reach the verification, profile and settings pages.
-  if (me.status !== 'active' && pathname !== '/verify' && pathname !== '/me' && pathname !== '/settings') return <Navigate to="/verify" replace />
+  // The admin console is its own full-width app with a sidebar; it brings its own layout.
+  if (pathname.startsWith('/admin')) return <><TermsGate /><Outlet /></>
+
+  // Unverified members can only reach verification, profile setup, their profile, settings and the help pages.
+  const openToUnverified = /^\/(verify|setup|me|settings|help|guidelines|legal)(\/|$)/
+  if (me.status !== 'active' && !openToUnverified.test(pathname)) return <Navigate to="/verify" replace />
 
   const tabs = !noTabs.test(pathname)
   const bare = pathname.startsWith('/accepted')
   return (
     <div className="flex min-h-dvh flex-col">
-      {!bare && <div className="mx-auto w-full max-w-2xl"><TopBar /></div>}
+      <TermsGate />
+      {!bare &&<div className="mx-auto w-full max-w-2xl"><TopBar /></div>}
       <main className={`mx-auto flex w-full max-w-2xl flex-1 flex-col ${flush.test(pathname) ? '' : 'px-5 pt-4'} ${tabs ? 'pb-24 md:pb-10' : ''}`}>
         <Outlet />
       </main>
@@ -73,7 +86,15 @@ export default function App() {
       <Route path="/signup" element={<Auth mode="signup" />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/welcome" element={<Welcome />} />
+      <Route path="/values" element={<Values />} />
+      <Route path="/legal" element={<Legal />} />
+      <Route path="/legal/:doc" element={<Legal />} />
       <Route element={<Shell />}>
+        <Route path="/setup" element={<ProfileSetup />} />
+        <Route path="/guidelines" element={<Guidelines />} />
+        <Route path="/help" element={<Help />} />
+        <Route path="/settings/notifications" element={<NotificationSettings />} />
         <Route path="/verify" element={<Verify />} />
         <Route path="/wall" element={<Wall />} />
         <Route path="/request/:bumpId" element={<SendRequest />} />
@@ -85,7 +106,7 @@ export default function App() {
         <Route path="/membership" element={<Membership />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/me" element={<Profile />} />
-        <Route path="/admin" element={<Admin />} />
+        <Route path="/admin/*" element={<Admin />} />
         <Route path="*" element={<Navigate to="/wall" replace />} />
       </Route>
     </Routes>

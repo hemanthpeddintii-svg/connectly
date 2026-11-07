@@ -30,7 +30,7 @@ const json = async (r: Response) => (await r.json()) as any
 type Gender = 'man' | 'woman'
 
 async function signup(email: string, name: string, gender: Gender = 'man'): Promise<Account> {
-  const r = await call('POST', '/signup', { json: { email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
+  const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
   assert.equal(r.status, 200)
   const b = await json(r)
   return { token: b.token, bumpId: b.user.bumpId }
