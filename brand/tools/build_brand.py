@@ -47,7 +47,7 @@ def mark_a(small=False, reverse=False):
 
 
 def mark_b(small=False, reverse=False):
-    """The Gap: a ring cut into two halves, offset vertically; the gap is the bump (closing it = a match)."""
+    """The Gap: a ring cut into two halves, offset vertically; the gap is the opening (closing it = a connection)."""
     R, r = 92, 46
     if reverse:
         r += 2
