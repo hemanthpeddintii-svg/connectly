@@ -4,7 +4,7 @@ import { createReadStream } from 'node:fs'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
-import { db, newId } from '../db.ts'
+import { db, newId, track } from '../db.ts'
 import { authed, getUser, requireActive } from '../guards.ts'
 import { UPLOAD_DIR, removeQuietly, sniffAudio, sniffImage, tx } from '../verification.ts'
 import { checkMessageAllowed, errorStatus, notifyMessage, pushToUser } from './hooks.ts'
@@ -108,6 +108,7 @@ export async function attachmentRoutes(app: FastifyInstance) {
     const file = `${CHAT_DIR}/${newId()}.${type.ext}`
     await writeFile(path.join(UPLOAD_DIR, file), upload.file, { mode: 0o600 })
 
+    const firstMessage = !db.prepare('SELECT 1 FROM messages WHERE connection_id = ? LIMIT 1').get(id)
     const message = { id: newId(), createdAt: Date.now() }
     let stored: boolean
     try {
@@ -130,6 +131,8 @@ export async function attachmentRoutes(app: FastifyInstance) {
 
     const view = { id: message.id, kind, body: '', attachmentMime: type.mime, attachmentDurationMs: durationMs, createdAt: message.createdAt }
     pushToUser(otherId, { type: 'message', connectionId: id, message: { ...view, mine: false } })
+    if (firstMessage) track('chat_started', req.user.sub, { connectionId: id })
+    track('message_sent', req.user.sub, { kind: kind === 'voice' ? 'voice' : 'attachment' })
     notifyMessage({ connectionId: id, senderId: req.user.sub, recipientId: otherId, preview: kind === 'image' ? '[Photo]' : '[Voice message]' })
     return reply.code(201).send({ ...view, mine: true })
   })

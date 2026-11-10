@@ -6,12 +6,15 @@ import rateLimitPlugin from '@fastify/rate-limit'
 import { z } from 'zod'
 import type { WebSocket } from 'ws'
 import {
-  db, hashPassword, newBumpId, newId, publicProfile, selfProfile, verifyPassword, type UserRow,
+  db, hashPassword, newMemberId, newId, publicProfile, selfProfile, track, trackOnce, verifyPassword, type UserRow,
 } from './db.ts'
 import { adminEmails, authed, getUser, requireActive, sessionValid } from './guards.ts'
 import { authRoutes } from './auth.ts'
 import { DUMMY_HASH, clearFailures, lockRemainingMs, passwordSchema, rateLimit, recordFailure, securityHeaders } from './security.ts'
-import { verificationRoutes } from './verification.ts'
+import { betaFull, consumeInvite, grantBetaCredits } from './features/beta.ts'
+import { profileComplete } from './features/tracking.ts'
+import { getSettings } from './plans.ts'
+import { tx, verificationRoutes } from './verification.ts'
 import { paymentRoutes } from './payments.ts'
 import { requestRoutes } from './requests.ts'
 import { adminRoutes } from './admin.ts'
@@ -69,8 +72,10 @@ const signupSchema = z.object({
   bio: z.string().max(500).default(''),
   interests: z.array(z.string().trim().min(1).max(30)).max(12).default([]),
   city: z.string().trim().max(60).default(''),
+  languages: z.array(z.string().trim().min(1).max(30)).max(8).default([]),
   lookingFor: z.string().trim().max(300).default(''),
   agreeToTerms: z.literal(true),
+  inviteCode: z.string().trim().max(40).optional(),
 })
 
 app.post('/v0/signup', rateLimit(10, '1 hour'), async (req, reply) => {
@@ -83,13 +88,41 @@ app.post('/v0/signup', rateLimit(10, '1 hour'), async (req, reply) => {
   }
   const id = newId()
   const isAdmin = adminEmails.has(email)
-  db.prepare(
-    'INSERT INTO users (id,bump_id,email,password_hash,name,age,bio,interests,gender,status,role,created_at,city,looking_for,terms_agreed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-  ).run(
-    id, newBumpId(), email, hashPassword(d.password), d.name, d.age, d.bio, JSON.stringify(d.interests), d.gender,
-    isAdmin ? 'active' : 'unverified', isAdmin ? 'admin' : 'user', Date.now(), d.city, d.lookingFor, Date.now(),
-  )
+  class Refused extends Error {}
+  let source: { kind: string; ref: string | null } = { kind: 'direct', ref: null }
+  let out = 'ok' as 'ok' | 'invite_invalid' | 'beta_full'
+  try {
+    tx(() => {
+      // Invite-only: a missing, unknown or used-up code is refused. When not invite-only, a valid code is still honored.
+      // Errors are thrown so the transaction (including the consumed invite use) rolls back.
+      let invitedBy: string | null = null
+      source = { kind: 'direct', ref: null }
+      if (!isAdmin) {
+        const invite = d.inviteCode ? consumeInvite(d.inviteCode) : 'invalid'
+        if (invite === 'invalid') {
+          if (getSettings().invite_only) { out = 'invite_invalid'; throw new Refused() }
+        } else { invitedBy = invite.ownerId; source = { kind: invite.kind, ref: invite.ref } }
+        if (betaFull(d.gender)) { out = 'beta_full'; throw new Refused() }
+      }
+      db.prepare(
+        'INSERT INTO users (id,member_id,email,password_hash,name,age,bio,interests,gender,status,role,created_at,city,languages,looking_for,terms_agreed_at,invited_by,source_kind,source_ref) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      ).run(
+        id, newMemberId(), email, hashPassword(d.password), d.name, d.age, d.bio, JSON.stringify(d.interests), d.gender,
+        isAdmin ? 'active' : 'unverified', isAdmin ? 'admin' : 'user', Date.now(), d.city, JSON.stringify(d.languages), d.lookingFor, Date.now(),
+        invitedBy, source.kind, source.ref,
+      )
+      if (d.gender === 'man' && !isAdmin) grantBetaCredits(id)
+    })
+  } catch (e) {
+    if (!(e instanceof Refused)) throw e
+  }
+  if (out === 'invite_invalid') return reply.code(400).send({ error: 'invite_invalid' })
+  if (out === 'beta_full') return reply.code(409).send({ error: 'beta_full' })
   const user = getUser(id)!
+  track('signup', id, { gender: d.gender, source: source.kind })
+  track('terms_agreed', id)
+  if (source.kind !== 'direct') track('invite_used', id, { kind: source.kind })
+  if (profileComplete(user)) trackOnce('profile_completed', id)
   return { token: sign(user), user: selfProfile(user) }
 })
 
@@ -111,6 +144,7 @@ app.post('/v0/login', rateLimit(20, '1 minute'), async (req, reply) => {
     return reply.code(401).send({ error: 'invalid_credentials' })
   }
   clearFailures(key)
+  track('login', user.id)
   return { token: sign(user), user: selfProfile(user) }
 })
 
@@ -128,6 +162,7 @@ app.patch('/v0/me', authed, async (req, reply) => {
     interests: z.array(z.string().trim().min(1).max(30)).max(12).optional(),
     gender: z.enum(['man', 'woman']).optional(),
     city: z.string().trim().max(60).optional(),
+    languages: z.array(z.string().trim().min(1).max(30)).max(8).optional(),
     lookingFor: z.string().trim().max(300).optional(),
   }).safeParse(req.body)
   if (!body.success) return reply.code(400).send({ error: 'invalid_input' })
@@ -135,22 +170,35 @@ app.patch('/v0/me', authed, async (req, reply) => {
   if (!u) return reply.code(401).send({ error: 'unauthorized' })
   // Gender decides which side of a request a member is on, so it can be set once (accounts that predate it) and never switched.
   if (body.data.gender && u.gender && body.data.gender !== u.gender) return reply.code(409).send({ error: 'gender_locked' })
-  if (body.data.gender && !u.gender) db.prepare('UPDATE users SET gender = ? WHERE id = ?').run(body.data.gender, u.id)
-  db.prepare('UPDATE users SET name=?, bio=?, interests=?, city=?, looking_for=? WHERE id=?').run(
+  if (body.data.gender && !u.gender) {
+    const g = body.data.gender
+    const full = tx(() => {
+      if (betaFull(g)) return true
+      db.prepare('UPDATE users SET gender = ? WHERE id = ?').run(g, u.id)
+      if (g === 'man') grantBetaCredits(u.id)
+      return false
+    })
+    if (full) return reply.code(409).send({ error: 'beta_full' })
+  }
+  db.prepare('UPDATE users SET name=?, bio=?, interests=?, city=?, languages=?, looking_for=? WHERE id=?').run(
     body.data.name ?? u.name,
     body.data.bio ?? u.bio,
     body.data.interests ? JSON.stringify(body.data.interests) : u.interests,
     body.data.city ?? u.city,
+    body.data.languages ? JSON.stringify(body.data.languages) : u.languages,
     body.data.lookingFor ?? u.looking_for,
     u.id,
   )
-  return selfProfile(getUser(u.id)!)
+  const after = getUser(u.id)!
+  if (profileComplete(after)) trackOnce('profile_completed', u.id)
+  return selfProfile(after)
 })
 
 app.post('/v0/me/agree-terms', authed, async (req, reply) => {
   const u = getUser(req.user.sub)
   if (!u) return reply.code(401).send({ error: 'unauthorized' })
   db.prepare('UPDATE users SET terms_agreed_at = COALESCE(terms_agreed_at, ?) WHERE id = ?').run(Date.now(), u.id)
+  trackOnce('terms_agreed', u.id)
   return { termsAgreed: true }
 })
 
@@ -171,9 +219,9 @@ app.get('/v0/profiles', active, async (req, reply) => {
 
 // "Not now" on a community card hides that member from the viewer's list. Introductions go through /v0/requests.
 app.post('/v0/actions', active, async (req, reply) => {
-  const body = z.object({ bumpId: z.string(), action: z.literal('skip') }).safeParse(req.body)
+  const body = z.object({ memberId: z.string(), action: z.literal('skip') }).safeParse(req.body)
   if (!body.success) return reply.code(400).send({ error: 'invalid_input' })
-  const target = db.prepare('SELECT * FROM users WHERE bump_id = ?').get(body.data.bumpId) as UserRow | undefined
+  const target = db.prepare('SELECT * FROM users WHERE member_id = ?').get(body.data.memberId) as UserRow | undefined
   if (!target || target.id === req.user.sub || target.status !== 'active') return reply.code(404).send({ error: 'not_found' })
   db.prepare(
     "INSERT INTO actions (from_id,to_id,action,created_at) VALUES (?,?,'skip',?) ON CONFLICT(from_id,to_id) DO UPDATE SET action='skip', created_at=excluded.created_at",
@@ -247,6 +295,7 @@ app.post('/v0/connections/:id/messages', active, async (req, reply) => {
   const other = c.a_id === req.user.sub ? c.b_id : c.a_id
   const refused = checkMessageAllowed(getUser(req.user.sub)!, other)
   if (refused) return reply.code(errorStatus(refused)).send({ error: refused })
+  const firstMessage = !db.prepare('SELECT 1 FROM messages WHERE connection_id = ? LIMIT 1').get(id)
   const msg = { id: newId(), createdAt: Date.now() }
   db.prepare('INSERT INTO messages (id,connection_id,sender_id,body,created_at) VALUES (?,?,?,?,?)')
     .run(msg.id, id, req.user.sub, body.data.body, msg.createdAt)
@@ -254,6 +303,8 @@ app.post('/v0/connections/:id/messages', active, async (req, reply) => {
     type: 'message', connectionId: id,
     message: { id: msg.id, mine: false, kind: 'text', body: body.data.body, attachmentMime: null, attachmentDurationMs: null, createdAt: msg.createdAt },
   })
+  if (firstMessage) track('chat_started', req.user.sub, { connectionId: id })
+  track('message_sent', req.user.sub, { kind: 'text' })
   notifyMessage({ connectionId: id, senderId: req.user.sub, recipientId: other, preview: body.data.body })
   return { id: msg.id, mine: true, kind: 'text', body: body.data.body, attachmentMime: null, attachmentDurationMs: null, createdAt: msg.createdAt }
 })

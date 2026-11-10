@@ -17,7 +17,7 @@ let proc: ChildProcess
 let dir: string
 let dbPath: string
 
-type Member = { email: string; token: string; bumpId: string; gender: 'man' | 'woman' }
+type Member = { email: string; token: string; memberId: string; gender: 'man' | 'woman' }
 
 async function call(method: string, url: string, opts: { token?: string; json?: unknown; form?: FormData } = {}) {
   const headers: Record<string, string> = {}
@@ -35,7 +35,7 @@ async function signup(gender: 'man' | 'woman', name = 'Test'): Promise<Member> {
   const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: PW, name, age: 30, gender, interests: ['jazz'] } })
   assert.equal(r.status, 200, 'signup')
   const b = await j(r)
-  return { email, token: b.token, bumpId: b.user.bumpId, gender }
+  return { email, token: b.token, memberId: b.user.memberId, gender }
 }
 
 /** The admin account is whichever signs up with an ADMIN_EMAILS address; created on first use. */
@@ -56,7 +56,7 @@ async function active(gender: 'man' | 'woman', name = 'Test', credits = 0): Prom
   assert.equal((await call('POST', '/verification', { token: m.token, form })).status, 201)
   const admin = await adminToken()
   const list = (await j(await call('GET', '/admin/verifications', { token: admin }))) as any[]
-  const item = list.find((x) => x.user.bumpId === m.bumpId)
+  const item = list.find((x) => x.user.memberId === m.memberId)
   assert.equal((await call('POST', `/admin/verifications/${item.id}/decision`, { token: admin, json: { decision: 'approve' } })).status, 200)
   if (credits) setCredits(m.email, credits)
   return m
@@ -69,7 +69,7 @@ function setCredits(email: string, credits: number) {
 }
 const credits = async (m: Member) => (await j(await call('GET', '/me', { token: m.token }))).requestCredits as number
 
-const sendRequest = (from: Member, to: Member, note = 'Hello there') => call('POST', '/requests', { token: from.token, json: { bumpId: to.bumpId, note } })
+const sendRequest = (from: Member, to: Member, note = 'Hello there') => call('POST', '/requests', { token: from.token, json: { memberId: to.memberId, note } })
 const decide = (woman: Member, requestId: string, decision: 'accept' | 'decline') => call('POST', `/requests/${requestId}/decision`, { token: woman.token, json: { decision } })
 const inbox = async (w: Member, status = 'pending') => (await j(await call('GET', `/requests/received?status=${status}`, { token: w.token }))) as any[]
 
@@ -130,14 +130,14 @@ describe('gender and the community list', () => {
     assert.equal((await call('GET', '/profiles', { token: w1.token })).status, 403, 'women have no community list')
     void unverified; void otherMan
 
-    assert.equal((await call('POST', '/actions', { token: man.token, json: { bumpId: w1.bumpId, action: 'skip' } })).status, 200)
+    assert.equal((await call('POST', '/actions', { token: man.token, json: { memberId: w1.memberId, action: 'skip' } })).status, 200)
     assert.equal((await sendRequest(man, w2)).status, 201)
     names = await seen()
     assert.ok(!names.includes('Wendy'), 'skipped')
     assert.ok(!names.includes('Wanda'), 'already requested')
     assert.ok(names.includes('Wilma'))
     // "like" no longer exists
-    assert.equal((await call('POST', '/actions', { token: man.token, json: { bumpId: w3.bumpId, action: 'like' } })).status, 400)
+    assert.equal((await call('POST', '/actions', { token: man.token, json: { memberId: w3.memberId, action: 'like' } })).status, 400)
   })
 })
 
@@ -173,12 +173,16 @@ describe('sending a request', () => {
     assert.equal((await sendRequest(man, man2)).status, 404, 'only women can be requested')
     assert.equal((await sendRequest(woman, woman)).status, 403, 'a woman cannot send requests')
     assert.equal((await sendRequest(unverified, woman)).status, 403, 'unverified members cannot send')
-    assert.equal((await call('POST', '/requests', { token: man.token, json: { bumpId: 'NOPE', note: 'x' } })).status, 404)
-    assert.equal((await call('POST', '/requests', { token: man.token, json: { bumpId: woman.bumpId, note: 'x'.repeat(301) } })).status, 400)
-    assert.equal((await call('POST', '/requests', { json: { bumpId: woman.bumpId } })).status, 401)
+    assert.equal((await call('POST', '/requests', { token: man.token, json: { memberId: 'NOPE', note: 'x' } })).status, 404)
+    assert.equal((await call('POST', '/requests', { token: man.token, json: { memberId: woman.memberId, note: 'x'.repeat(301) } })).status, 400)
+    assert.equal((await call('POST', '/requests', { json: { memberId: woman.memberId } })).status, 401)
     assert.equal(await credits(man), 5, 'no failed attempt spent a request')
-    // an empty note is allowed
-    assert.equal((await call('POST', '/requests', { token: man.token, json: { bumpId: woman.bumpId } })).status, 201)
+    // a request is a note: a missing, empty or blank note is refused and spends nothing
+    for (const json of [{ memberId: woman.memberId }, { memberId: woman.memberId, note: '' }, { memberId: woman.memberId, note: '   ' }]) {
+      assert.equal((await call('POST', '/requests', { token: man.token, json })).status, 400)
+    }
+    assert.equal(await credits(man), 5, 'an empty note spent nothing')
+    assert.equal((await call('POST', '/requests', { token: man.token, json: { memberId: woman.memberId, note: 'a real note' } })).status, 201)
   })
 
   it('never spends more credits than the balance, even with simultaneous requests', async () => {
@@ -237,7 +241,7 @@ describe('the inbox and deciding', () => {
     for (const [who, other] of [[man, woman], [woman, man]] as const) {
       const list = (await j(await call('GET', '/connections', { token: who.token }))) as any[]
       assert.equal(list.length >= 1, true)
-      const entry = list.find((c) => c.profile.bumpId === other.bumpId)
+      const entry = list.find((c) => c.profile.memberId === other.memberId)
       assert.equal(entry.id, connectionId)
     }
 
@@ -285,7 +289,7 @@ describe('the inbox and deciding', () => {
     const [a, b] = await Promise.all([decide(woman, req.id, 'accept'), decide(woman, req.id, 'accept')])
     assert.deepEqual([a.status, b.status].sort(), [200, 409])
     const list = (await j(await call('GET', '/connections', { token: woman.token }))) as any[]
-    assert.equal(list.filter((c) => c.profile.bumpId === man.bumpId).length, 1)
+    assert.equal(list.filter((c) => c.profile.memberId === man.memberId).length, 1)
   })
 
   it('a block placed after the request still stops the accept and hides it from the inbox', async () => {
@@ -293,12 +297,12 @@ describe('the inbox and deciding', () => {
     const woman = await active('woman', 'Careful')
     await sendRequest(man, woman)
     const [req] = await inbox(woman)
-    assert.equal((await call('POST', '/blocks', { token: woman.token, json: { bumpId: man.bumpId } })).status, 200)
+    assert.equal((await call('POST', '/blocks', { token: woman.token, json: { memberId: man.memberId } })).status, 200)
     assert.equal((await inbox(woman)).length, 0, 'blocked senders vanish from the inbox')
     const r = await decide(woman, req.id, 'accept')
     assert.notEqual(r.status, 200, 'cannot accept a blocked member')
     const list = (await j(await call('GET', '/connections', { token: woman.token }))) as any[]
-    assert.equal(list.filter((c) => c.profile.bumpId === man.bumpId).length, 0)
+    assert.equal(list.filter((c) => c.profile.memberId === man.memberId).length, 0)
   })
 })
 
@@ -353,7 +357,7 @@ describe('request packs add requests', () => {
 
     const admin = await adminToken()
     const queue = (await j(await call('GET', '/admin/payments', { token: admin }))) as any[]
-    const item = queue.find((p) => p.user.bumpId === man.bumpId)
+    const item = queue.find((p) => p.user.memberId === man.memberId)
     assert.equal(item.requests, 10)
     assert.equal(item.amountPaise, 49900)
     assert.equal((await call('POST', `/admin/payments/${item.id}/decision`, { token: admin, json: { decision: 'approve' } })).status, 200)

@@ -30,16 +30,16 @@ async function call(method: string, url: string, opts: { token?: string; json?: 
 }
 
 type Gender = 'man' | 'woman'
-type User = { token: string; bumpId: string; id: string; email: string; gender: Gender }
+type User = { token: string; memberId: string; id: string; email: string; gender: Gender }
 let counter = 0
 
 async function signup(name: string, gender: Gender = 'woman'): Promise<User> {
   const email = `acct${++counter}-${Math.random().toString(36).slice(2, 8)}@x.test`
   const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
   assert.equal(r.status, 200)
-  const j = (await r.json()) as { token: string; user: { bumpId: string } }
+  const j = (await r.json()) as { token: string; user: { memberId: string } }
   const row = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as { id: string }
-  return { token: j.token, bumpId: j.user.bumpId, id: row.id, email, gender }
+  return { token: j.token, memberId: j.user.memberId, id: row.id, email, gender }
 }
 
 const form = (parts: Record<string, [Buffer, string]>) => {
@@ -54,7 +54,7 @@ async function member(name: string, gender: Gender = 'woman'): Promise<User> {
   assert.equal((await call('POST', '/verification', { token: u.token, form: form({ selfie: [JPEG, 'image/jpeg'], voice: [WEBM, 'audio/webm'] }) })).status, 201)
   const login = await (await call('POST', '/login', { json: { email: 'admin@x.test', password: 'Tr0ub4dor&3xKq' } })).json() as any
   const list = (await (await call('GET', '/admin/verifications', { token: login.token })).json()) as any[]
-  const item = list.find((x) => x.user.bumpId === u.bumpId)
+  const item = list.find((x) => x.user.memberId === u.memberId)
   assert.equal((await call('POST', `/admin/verifications/${item.id}/decision`, { token: login.token, json: { decision: 'approve' } })).status, 200)
   return u
 }
@@ -65,7 +65,7 @@ async function connect(a: User, b: User): Promise<string> {
   assert.equal(man.gender, 'man')
   assert.equal(woman.gender, 'woman')
   db.prepare('UPDATE users SET request_credits = ? WHERE email = ?').run(5, man.email)
-  let r = await call('POST', '/requests', { token: man.token, json: { bumpId: woman.bumpId, note: 'hi' } })
+  let r = await call('POST', '/requests', { token: man.token, json: { memberId: woman.memberId, note: 'hi' } })
   assert.equal(r.status, 201)
   const { id } = (await r.json()) as { id: string }
   r = await call('POST', `/requests/${id}/decision`, { token: woman.token, json: { decision: 'accept' } })
@@ -75,8 +75,8 @@ async function connect(a: User, b: User): Promise<string> {
   return j.connectionId
 }
 
-const wallNames = async (u: User) => ((await (await call('GET', '/profiles', { token: u.token })).json()) as any[]).map((p) => p.bumpId as string)
-const connectionIds = async (u: User) => ((await (await call('GET', '/connections', { token: u.token })).json()) as any[]).map((c) => c.profile.bumpId as string)
+const wallNames = async (u: User) => ((await (await call('GET', '/profiles', { token: u.token })).json()) as any[]).map((p) => p.memberId as string)
+const connectionIds = async (u: User) => ((await (await call('GET', '/connections', { token: u.token })).json()) as any[]).map((c) => c.profile.memberId as string)
 const account = async (u: User) => (await (await call('GET', '/account', { token: u.token })).json()) as any
 const send = (u: User, connId: string) => call('POST', `/connections/${connId}/messages`, { token: u.token, json: { body: 'hello' } })
 
@@ -146,7 +146,7 @@ describe('quiet mode', () => {
     const other = await member('Other', 'man')
     const friend = await member('Friend', 'man')
     const connId = await connect(quiet, friend)
-    assert.ok((await wallNames(other)).includes(quiet.bumpId))
+    assert.ok((await wallNames(other)).includes(quiet.memberId))
 
     const before = Date.now()
     let r = await call('POST', '/account/quiet-mode', { token: quiet.token, json: { hours: 2 } })
@@ -155,9 +155,9 @@ describe('quiet mode', () => {
     assert.ok(s.quietUntil >= before + 2 * 3600_000 && s.quietUntil <= Date.now() + 2 * 3600_000)
     assert.equal(s.deactivated, false)
 
-    assert.ok(!(await wallNames(other)).includes(quiet.bumpId), 'hidden from wall')
+    assert.ok(!(await wallNames(other)).includes(quiet.memberId), 'hidden from wall')
     assert.equal((await call('GET', '/me', { token: quiet.token })).status, 200, 'can still use the app')
-    assert.ok((await connectionIds(friend)).includes(quiet.bumpId), 'connections unaffected')
+    assert.ok((await connectionIds(friend)).includes(quiet.memberId), 'connections unaffected')
     assert.equal((await send(quiet, connId)).status, 200, 'can chat')
     assert.equal((await send(friend, connId)).status, 200, 'can be chatted with')
 
@@ -167,7 +167,7 @@ describe('quiet mode', () => {
       assert.equal(r.status, 200)
       assert.equal(((await r.json()) as any).quietUntil, null)
     }
-    assert.ok((await wallNames(other)).includes(quiet.bumpId), 'visible again')
+    assert.ok((await wallNames(other)).includes(quiet.memberId), 'visible again')
   })
 
   it('without hours lasts until turned off', async () => {
@@ -175,19 +175,19 @@ describe('quiet mode', () => {
     const other = await member('Watcher', 'man')
     const s = await (await call('POST', '/account/quiet-mode', { token: quiet.token })).json() as any
     assert.equal(s.quietUntil, 8_640_000_000_000_000)
-    assert.ok(!(await wallNames(other)).includes(quiet.bumpId))
+    assert.ok(!(await wallNames(other)).includes(quiet.memberId))
     await call('DELETE', '/account/quiet-mode', { token: quiet.token })
-    assert.ok((await wallNames(other)).includes(quiet.bumpId))
+    assert.ok((await wallNames(other)).includes(quiet.memberId))
   })
 
   it('expires on read without any timer', async () => {
     const quiet = await member('Expiring')
     const other = await member('Watcher2', 'man')
     await call('POST', '/account/quiet-mode', { token: quiet.token, json: { hours: 1 } })
-    assert.ok(!(await wallNames(other)).includes(quiet.bumpId))
+    assert.ok(!(await wallNames(other)).includes(quiet.memberId))
     db.prepare('UPDATE account_state SET quiet_until = ? WHERE user_id = ?').run(Date.now() - 1000, quiet.id)
     assert.equal((await account(quiet)).quietUntil, null)
-    assert.ok((await wallNames(other)).includes(quiet.bumpId))
+    assert.ok((await wallNames(other)).includes(quiet.memberId))
   })
 
   it('refuses requests aimed at a quiet member, but she can still decide the ones she already has', async () => {
@@ -195,10 +195,10 @@ describe('quiet mode', () => {
     const other = await member('Liker', 'man')
     const earlier = await member('EarlierAsker', 'man')
     db.prepare('UPDATE users SET request_credits = 5 WHERE email IN (?, ?)').run(other.email, earlier.email)
-    const sent = await call('POST', '/requests', { token: earlier.token, json: { bumpId: quiet.bumpId, note: 'hi' } })
+    const sent = await call('POST', '/requests', { token: earlier.token, json: { memberId: quiet.memberId, note: 'hi' } })
     assert.equal(sent.status, 201)
     await call('POST', '/account/quiet-mode', { token: quiet.token, json: { hours: 5 } })
-    const r = await call('POST', '/requests', { token: other.token, json: { bumpId: quiet.bumpId, note: 'hi' } })
+    const r = await call('POST', '/requests', { token: other.token, json: { memberId: quiet.memberId, note: 'hi' } })
     assert.equal(r.status, 404)
     assert.equal(((await r.json()) as any).error, 'not_found')
     assert.equal((db.prepare('SELECT request_credits AS c FROM users WHERE id = ?').get(other.id) as any).c, 5, 'no credit spent')
@@ -213,9 +213,9 @@ describe('deactivation', () => {
     const friend = await member('Friend2', 'man')
     const stranger = await member('Stranger', 'man')
     const connId = await connect(gone, friend)
-    assert.ok((await connectionIds(friend)).includes(gone.bumpId))
+    assert.ok((await connectionIds(friend)).includes(gone.memberId))
     db.prepare('UPDATE users SET request_credits = 5 WHERE email = ?').run(stranger.email)
-    const pending = (await (await call('POST', '/requests', { token: stranger.token, json: { bumpId: gone.bumpId, note: 'hi' } })).json()) as any
+    const pending = (await (await call('POST', '/requests', { token: stranger.token, json: { memberId: gone.memberId, note: 'hi' } })).json()) as any
 
     assert.equal((await call('POST', '/account/deactivate', { token: gone.token })).status, 200)
     const first = await account(gone)
@@ -223,8 +223,8 @@ describe('deactivation', () => {
     // Idempotent
     assert.deepEqual(await (await call('POST', '/account/deactivate', { token: gone.token })).json(), first)
 
-    assert.ok(!(await wallNames(stranger)).includes(gone.bumpId))
-    assert.ok(!(await connectionIds(friend)).includes(gone.bumpId))
+    assert.ok(!(await wallNames(stranger)).includes(gone.memberId))
+    assert.ok(!(await connectionIds(friend)).includes(gone.memberId))
 
     let r = await call('POST', `/requests/${pending.id}/decision`, { token: gone.token, json: { decision: 'accept' } })
     assert.equal(r.status, 403)
@@ -232,7 +232,7 @@ describe('deactivation', () => {
     r = await send(gone, connId)
     assert.equal(r.status, 403)
     assert.equal(((await r.json()) as any).error, 'account_deactivated')
-    r = await call('POST', '/requests', { token: friend.token, json: { bumpId: gone.bumpId, note: 'hi' } })
+    r = await call('POST', '/requests', { token: friend.token, json: { memberId: gone.memberId, note: 'hi' } })
     assert.equal(r.status, 404)
     r = await send(friend, connId)
     assert.equal(r.status, 404)
@@ -254,8 +254,8 @@ describe('deactivation', () => {
       assert.equal(r.status, 200)
       assert.equal(((await r.json()) as any).deactivated, false)
     }
-    assert.ok((await wallNames(await member('Newcomer', 'man'))).includes(u.bumpId))
-    assert.ok((await connectionIds(friend)).includes(u.bumpId))
+    assert.ok((await wallNames(await member('Newcomer', 'man'))).includes(u.memberId))
+    assert.ok((await connectionIds(friend)).includes(u.memberId))
     assert.equal((await send(u, connId)).status, 200)
   })
 })
@@ -278,7 +278,7 @@ describe('delete request', () => {
     assert.ok(s.deleteRequestedAt >= before && s.deleteRequestedAt <= Date.now())
     assert.equal(s.deletionDueAt, s.deleteRequestedAt + 30 * DAY)
     assert.equal(s.deactivated, true)
-    assert.ok(!(await wallNames(other)).includes(u.bumpId))
+    assert.ok(!(await wallNames(other)).includes(u.memberId))
     const row = db.prepare('SELECT delete_reason FROM account_state WHERE user_id = ?').get(u.id) as any
     assert.equal(row.delete_reason, 'moving on')
     const user = db.prepare('SELECT email, name FROM users WHERE id = ?').get(u.id) as any
@@ -306,7 +306,7 @@ describe('delete request', () => {
       assert.equal(r.status, 200)
       assert.deepEqual(await r.json(), { quietUntil: null, deactivated: false, deleteRequestedAt: null, deletionDueAt: null })
     }
-    assert.ok((await wallNames(other)).includes(u.bumpId))
+    assert.ok((await wallNames(other)).includes(u.memberId))
     assert.equal((db.prepare('SELECT delete_reason FROM account_state WHERE user_id = ?').get(u.id) as any).delete_reason, null)
 
     const v = await member('PreDeactivated')
@@ -336,21 +336,24 @@ describe('purge-deleted-accounts', () => {
     db.prepare('INSERT INTO actions (from_id,to_id,action,created_at) VALUES (?,?,?,?)').run(friend.id, due.id, 'skip', Date.now())
     assert.equal((await call('POST', '/account/quiet-mode', { token: due.token })).status, 200)
 
-    // Files: verification selfie/voice (from signup), a payment proof, a message attachment.
+    // Files: a payment proof and a message attachment. The verification selfie and voice clip no longer exist at all:
+    // they are deleted as soon as the verification is approved (see verification-cleanup.test.ts).
     const pf = form({ proof: [PNG, 'image/png'] }); pf.set('planId', 'pack10'); pf.set('reference', `UTR${Date.now()}`)
     assert.equal((await call('POST', '/payments', { token: due.token, form: pf })).status, 201)
     const attach = `${crypto.randomUUID()}.png`
     await writeFile(upFile(attach), PNG)
     db.prepare("INSERT INTO messages (id, connection_id, sender_id, body, kind, attachment_file, attachment_mime, created_at) VALUES (?,?,?,?,?,?,?,?)")
       .run(crypto.randomUUID(), connId, due.id, 'secret caption', 'image', attach, 'image/png', Date.now())
-    const owned = [
-      ...(db.prepare('SELECT selfie_file AS f FROM verifications WHERE user_id = ? UNION ALL SELECT voice_file FROM verifications WHERE user_id = ?').all(due.id, due.id) as any[]),
-      ...(db.prepare('SELECT proof_file AS f FROM payments WHERE user_id = ?').all(due.id) as any[]),
-    ].map((r) => r.f as string)
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM verifications WHERE user_id = ? AND selfie_file != ''").get(due.id) as any).n, 0, 'verification files are already deleted')
+    const owned = (db.prepare('SELECT proof_file AS f FROM payments WHERE user_id = ?').all(due.id) as any[]).map((r) => r.f as string)
     owned.push(attach)
-    assert.equal(owned.length, 4)
+    assert.equal(owned.length, 2)
     for (const f of owned) assert.ok(existsSync(upFile(f)), f)
-    const notDueFile = (db.prepare('SELECT selfie_file AS f FROM verifications WHERE user_id = ?').get(notDue.id) as any).f as string
+    // another member, not due for deletion, with a file of their own that must survive
+    const pf2 = form({ proof: [Buffer.concat([PNG, Buffer.from([7])]), 'image/png'] }); pf2.set('planId', 'pack10'); pf2.set('reference', `UTR${Date.now()}B`)
+    const bystander = await member('Bystander', 'man') // buys a pack but is not scheduled for deletion
+    assert.equal((await call('POST', '/payments', { token: bystander.token, form: pf2 })).status, 201)
+    const notDueFile = (db.prepare('SELECT proof_file AS f FROM payments WHERE user_id = ?').get(bystander.id) as any).f as string
 
     // Rows in optional feature tables (names match what the script looks for).
     db.exec(`
@@ -371,12 +374,12 @@ describe('purge-deleted-accounts', () => {
     requestDeletion(notDue, 29)
 
     // Dry run reports but changes nothing.
-    assert.deepEqual(await purge({ dryRun: true }), { due: 1, purged: 0, failed: 0, filesRemoved: 4 })
+    assert.deepEqual(await purge({ dryRun: true }), { due: 1, purged: 0, failed: 0, filesRemoved: 2 })
     assert.equal((db.prepare('SELECT name FROM users WHERE id = ?').get(due.id) as any).name, 'DueMember')
     for (const f of owned) assert.ok(existsSync(upFile(f)), `dry run kept ${f}`)
 
     const result = await purge({})
-    assert.deepEqual(result, { due: 1, purged: 1, failed: 0, filesRemoved: 4 })
+    assert.deepEqual(result, { due: 1, purged: 1, failed: 0, filesRemoved: 2 })
 
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(due.id) as any
     assert.equal(row.name, 'Deleted member')
@@ -395,7 +398,7 @@ describe('purge-deleted-accounts', () => {
     assert.equal((await call('GET', '/account', { token: due.token })).status, 401)
     assert.equal((await call('DELETE', '/account/delete-request', { token: due.token })).status, 401)
     assert.equal((await call('POST', '/verification', { token: due.token, form: form({ selfie: [JPEG, 'image/jpeg'], voice: [WEBM, 'audio/webm'] }) })).status, 401)
-    assert.ok(!(await connectionIds(friend)).includes(due.bumpId))
+    assert.ok(!(await connectionIds(friend)).includes(due.memberId))
 
     // Referential integrity: rows kept, content gone, other tables cleaned.
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), [])

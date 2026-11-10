@@ -26,7 +26,7 @@ async function signup(email: string, gender: 'man' | 'woman', name: string) {
   const r = await call('POST', '/signup', undefined, { email, password: PW, name, age: 30, gender, agreeToTerms: true })
   assert.equal(r.status, 200)
   const b = await j(r)
-  return { token: b.token as string, bumpId: b.user.bumpId as string }
+  return { token: b.token as string, memberId: b.user.memberId as string }
 }
 
 async function verified(admin: string, gender: 'man' | 'woman', name: string) {
@@ -35,7 +35,7 @@ async function verified(admin: string, gender: 'man' | 'woman', name: string) {
   f.set('selfie', new Blob([new Uint8Array(JPEG)], { type: 'image/jpeg' }), 'a.jpg')
   f.set('voice', new Blob([new Uint8Array(WEBM)], { type: 'audio/webm' }), 'v.webm')
   assert.equal((await call('POST', '/verification', m.token, undefined, f)).status, 201)
-  const item = ((await j(await call('GET', '/admin/verifications', admin))) as any[]).find((x) => x.user.bumpId === m.bumpId)
+  const item = ((await j(await call('GET', '/admin/verifications', admin))) as any[]).find((x) => x.user.memberId === m.memberId)
   assert.equal((await call('POST', `/admin/verifications/${item.id}/decision`, admin, { decision: 'approve' })).status, 200)
   return m
 }
@@ -59,20 +59,20 @@ it('report decisions and lifting a suspension are recorded in the member audit t
   const reporter = await verified(admin, 'woman', 'Reporter')
   const offender = await verified(admin, 'man', 'Offender')
 
-  assert.equal((await call('POST', '/reports', reporter.token, { bumpId: offender.bumpId, reason: 'harassment', details: 'rude' })).status, 201)
+  assert.equal((await call('POST', '/reports', reporter.token, { memberId: offender.memberId, reason: 'harassment', details: 'rude' })).status, 201)
   const [item] = (await j(await call('GET', '/admin/reports?status=open', admin))) as any[]
   assert.ok(item)
   assert.equal((await call('POST', `/admin/reports/${item.report.id}/decision`, admin, { decision: 'action', note: 'Repeated rude messages', suspend: true })).status, 200)
 
-  let detail = await j(await call('GET', `/admin/members/${offender.bumpId}`, admin))
+  let detail = await j(await call('GET', `/admin/members/${offender.memberId}`, admin))
   assert.ok(detail.audit.some((a: any) => a.action === 'report.actioned' && a.detail.suspended === true && a.detail.note === 'Repeated rude messages'), 'report decision audited')
   assert.equal(detail.member.suspended, true)
 
-  assert.equal((await call('POST', `/admin/suspensions/${offender.bumpId}/lift`, admin)).status, 200)
-  detail = await j(await call('GET', `/admin/members/${offender.bumpId}`, admin))
+  assert.equal((await call('POST', `/admin/suspensions/${offender.memberId}/lift`, admin)).status, 200)
+  detail = await j(await call('GET', `/admin/members/${offender.memberId}`, admin))
   assert.ok(detail.audit.some((a: any) => a.action === 'suspension.lifted'), 'lift audited')
   assert.equal(detail.member.suspended, false)
-  assert.equal((await call('POST', `/admin/suspensions/${offender.bumpId}/lift`, admin)).status, 404, 'lifting twice finds nothing and writes no second entry')
-  detail = await j(await call('GET', `/admin/members/${offender.bumpId}`, admin))
+  assert.equal((await call('POST', `/admin/suspensions/${offender.memberId}/lift`, admin)).status, 404, 'lifting twice finds nothing and writes no second entry')
+  detail = await j(await call('GET', `/admin/members/${offender.memberId}`, admin))
   assert.equal(detail.audit.filter((a: any) => a.action === 'suspension.lifted').length, 1)
 })

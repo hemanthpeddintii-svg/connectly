@@ -38,10 +38,10 @@ function relatedColumns(): Array<{ table: string; column: string }> {
   return found
 }
 
-type Due = { id: string; bump_id: string }
+type Due = { id: string; member_id: string }
 
 const selectDue = (cutoff: number) => db.prepare(`
-  SELECT u.id, u.bump_id FROM account_state s JOIN users u ON u.id = s.user_id
+  SELECT u.id, u.member_id FROM account_state s JOIN users u ON u.id = s.user_id
   WHERE s.delete_requested_at IS NOT NULL AND s.delete_requested_at <= ? AND s.purged_at IS NULL
   ORDER BY s.delete_requested_at
 `).all(cutoff) as Due[]
@@ -94,7 +94,7 @@ export async function purgeDueAccounts({ dryRun = false }: { dryRun?: boolean } 
       result.filesRemoved += files.length
     } catch (e) {
       result.failed++
-      console.error(`failed to purge ${d.bump_id}:`, e instanceof Error ? e.message : e)
+      console.error(`failed to purge ${d.member_id}:`, e instanceof Error ? e.message : e)
     }
   }
   return result

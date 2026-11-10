@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { db, newId, publicProfile, type UserRow } from './db.ts'
+import { db, newId, publicProfile, track, type UserRow } from './db.ts'
 import { authed, getUser, requireActive } from './guards.ts'
 import { actionGuards, composeFilters, connectionFilters, errorStatus, notifyRequest, pushToUser } from './features/hooks.ts'
 import { tx } from './verification.ts'
@@ -35,10 +35,10 @@ export async function requestRoutes(app: FastifyInstance) {
   app.post('/v0/requests', member, async (req, reply) => {
     const me = getUser(req.user.sub)!
     if (me.gender !== 'man') return reply.code(403).send({ error: 'not_applicable' })
-    const body = z.object({ bumpId: z.string().min(1).max(32), note: z.string().trim().max(NOTE_MAX).default('') }).safeParse(req.body)
+    const body = z.object({ memberId: z.string().min(1).max(32), note: z.string().trim().min(1).max(NOTE_MAX) }).safeParse(req.body)
     if (!body.success) return reply.code(400).send({ error: 'invalid_input' })
 
-    const target = db.prepare('SELECT * FROM users WHERE bump_id = ?').get(body.data.bumpId) as UserRow | undefined
+    const target = db.prepare('SELECT * FROM users WHERE member_id = ?').get(body.data.memberId) as UserRow | undefined
     if (!target || target.id === me.id || target.status !== 'active' || target.gender !== 'woman') return reply.code(404).send({ error: 'not_found' })
     for (const guard of actionGuards) {
       const refused = guard(me.id, target)
@@ -57,6 +57,7 @@ export async function requestRoutes(app: FastifyInstance) {
     if (result === 'already_requested') return reply.code(409).send({ error: result })
     if (result === 'no_requests_left') return reply.code(402).send({ error: result })
 
+    track('request_sent', me.id, { requestId: result })
     pushToUser(target.id, { type: 'request', requestId: result })
     notifyRequest({ kind: 'sent', requestId: result, recipientId: target.id, actorId: me.id })
     return reply.code(201).send({ id: result, creditsLeft: getUser(me.id)!.request_credits })
@@ -75,7 +76,7 @@ export async function requestRoutes(app: FastifyInstance) {
       status: r.request_status as string,
       note: r.request_note as string,
       createdAt: r.request_created_at as number,
-      to: { bumpId: r.bump_id as string, name: r.name as string, age: r.age as number },
+      to: { memberId: r.member_id as string, name: r.name as string, age: r.age as number },
       connectionId: (r.request_connection_id as string | null) ?? null,
     }))
   })
@@ -134,6 +135,7 @@ export async function requestRoutes(app: FastifyInstance) {
       return { status: 'accepted' as const, connectionId }
     })
     if (!outcome) return reply.code(409).send({ error: 'already_decided' })
+    track(accept ? 'request_accepted' : 'request_declined', me.id, { requestId: r.id })
 
     pushToUser(r.from_id, {
       type: 'request_update', requestId: r.id, status: outcome.status,

@@ -40,7 +40,7 @@ async function call(method: string, url: string, opts: { token?: string; json?: 
 }
 
 type Gender = 'man' | 'woman'
-type Account = { token: string; user: { bumpId: string }; email: string; gender: Gender }
+type Account = { token: string; user: { memberId: string }; email: string; gender: Gender }
 
 async function signup(email: string, name: string, gender: Gender = 'woman') {
   const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
@@ -66,7 +66,7 @@ async function activeUser(admin: Account, email: string, name: string, gender: G
   f.set('voice', new Blob([new Uint8Array(WEBM)]), 'v.webm')
   assert.equal((await call('POST', '/verification', { token: u.token, form: f })).status, 201)
   const list = (await (await call('GET', '/admin/verifications', { token: admin.token })).json()) as any[]
-  const item = list.find((x) => x.user.bumpId === u.user.bumpId)
+  const item = list.find((x) => x.user.memberId === u.user.memberId)
   assert.equal((await call('POST', `/admin/verifications/${item.id}/decision`, { token: admin.token, json: { decision: 'approve' } })).status, 200)
   return u
 }
@@ -79,7 +79,7 @@ async function connect(a: Account, b: Account) {
   const sqlite = new DatabaseSync(ctx.dbPath)
   sqlite.exec('PRAGMA busy_timeout = 5000')
   try { sqlite.prepare('UPDATE users SET request_credits = ? WHERE email = ?').run(5, man.email) } finally { sqlite.close() }
-  const sent = await call('POST', '/requests', { token: man.token, json: { bumpId: woman.user.bumpId, note: 'hi' } })
+  const sent = await call('POST', '/requests', { token: man.token, json: { memberId: woman.user.memberId, note: 'hi' } })
   assert.equal(sent.status, 201)
   const { id } = (await sent.json()) as { id: string }
   const r = await call('POST', `/requests/${id}/decision`, { token: woman.token, json: { decision: 'accept' } })

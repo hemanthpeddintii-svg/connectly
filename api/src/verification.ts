@@ -4,7 +4,7 @@ import { createReadStream, mkdirSync } from 'node:fs'
 import { unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
-import { audit, db, newId } from './db.ts'
+import { audit, db, newId, track } from './db.ts'
 import { authed, getUser, requireAdmin } from './guards.ts'
 
 export const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR ?? 'uploads')
@@ -43,17 +43,49 @@ export function tx<T>(fn: () => T): T {
 }
 
 export const removeQuietly = (...files: string[]) =>
-  Promise.all(files.map((f) => unlink(path.join(UPLOAD_DIR, f)).catch(() => {})))
+  Promise.all(files.filter(Boolean).map((f) => unlink(path.join(UPLOAD_DIR, f)).catch(() => {})))
+
+/** A file that is gone (or never existed) counts as removed; any other failure means it is still there. */
+async function removeFile(name: string): Promise<boolean> {
+  if (!name) return true
+  try { await unlink(path.join(UPLOAD_DIR, name)); return true } catch (e: any) { return e?.code === 'ENOENT' }
+}
+
+/**
+ * Once a verification is decided the selfie and voice clip are no longer needed, so they are deleted. The row keeps
+ * the decision, the reviewer and the dates, and records when the files were removed. Safe to run repeatedly: anything
+ * that failed to delete the first time is picked up again (on the next decision and on every start).
+ */
+export async function deleteDecidedVerificationMedia(verificationId?: string): Promise<number> {
+  const rows = (verificationId
+    ? db.prepare("SELECT id, selfie_file, voice_file FROM verifications WHERE id = ? AND status != 'pending' AND media_deleted_at IS NULL").all(verificationId)
+    : db.prepare("SELECT id, selfie_file, voice_file FROM verifications WHERE status != 'pending' AND media_deleted_at IS NULL").all()
+  ) as { id: string; selfie_file: string; voice_file: string }[]
+  let done = 0
+  for (const r of rows) {
+    const okSelfie = await removeFile(r.selfie_file)
+    const okVoice = await removeFile(r.voice_file)
+    if (!okSelfie || !okVoice) continue // still on disk: try again later, and do not claim it is deleted
+    db.prepare("UPDATE verifications SET selfie_file = '', voice_file = '', media_deleted_at = ? WHERE id = ?").run(Date.now(), r.id)
+    track('verification_media_deleted', null, { verificationId: r.id })
+    done += 1
+  }
+  return done
+}
 
 type VerificationRow = {
   id: string; user_id: string; selfie_file: string; selfie_mime: string
   voice_file: string; voice_mime: string; status: string; reason: string | null
-  reviewed_by: string | null; created_at: number; reviewed_at: number | null
+  reviewed_by: string | null; created_at: number; reviewed_at: number | null; media_deleted_at: number | null
 }
 
 export async function verificationRoutes(app: FastifyInstance) {
   // Registered inside this plugin so upload limits apply only to these routes.
   await app.register(multipart, { limits: { fileSize: MAX_VOICE, files: 2, fields: 0, parts: 2 } })
+
+  // Catch anything that was not deleted when it was decided (a failed delete, or files from before this rule existed).
+  void deleteDecidedVerificationMedia().catch(() => {})
+  setInterval(() => { void deleteDecidedVerificationMedia().catch(() => {}) }, 60 * 60 * 1000).unref()
 
   // ---- user side ----------------------------------------------------------
   app.get('/v0/verification', authed, async (req, reply) => {
@@ -114,6 +146,7 @@ export async function verificationRoutes(app: FastifyInstance) {
       if (String(e?.message).includes('UNIQUE')) return reply.code(409).send({ error: 'cannot_submit', status: 'pending' })
       throw e
     }
+    track('verification_submitted', u.id)
     return reply.code(201).send({ status: 'pending' })
   })
 
@@ -124,12 +157,13 @@ export async function verificationRoutes(app: FastifyInstance) {
     const q = z.object({ status: z.enum(['pending', 'approved', 'rejected']).default('pending') }).safeParse(req.query)
     if (!q.success) return reply.code(400).send({ error: 'invalid_input' })
     const rows = db.prepare(`
-      SELECT v.id, v.status, v.reason, v.created_at, v.reviewed_at, u.bump_id, u.name, u.age, u.email
+      SELECT v.id, v.status, v.reason, v.created_at, v.reviewed_at, v.media_deleted_at, u.member_id, u.name, u.age, u.email
       FROM verifications v JOIN users u ON u.id = v.user_id
       WHERE v.status = ? ORDER BY v.created_at ASC LIMIT 100`).all(q.data.status) as any[]
     return rows.map((r) => ({
       id: r.id, status: r.status, reason: r.reason, createdAt: r.created_at, reviewedAt: r.reviewed_at,
-      user: { bumpId: r.bump_id, name: r.name, age: r.age, email: r.email },
+      mediaDeleted: r.media_deleted_at != null,
+      user: { memberId: r.member_id, name: r.name, age: r.age, email: r.email },
     }))
   })
 
@@ -138,6 +172,8 @@ export async function verificationRoutes(app: FastifyInstance) {
     if (!p.success) return reply.code(400).send({ error: 'invalid_input' })
     const v = db.prepare('SELECT * FROM verifications WHERE id = ?').get(p.data.id) as VerificationRow | undefined
     if (!v) return reply.code(404).send({ error: 'not_found' })
+    // Deleted after the decision; there is nothing left to serve.
+    if (v.media_deleted_at != null || !(p.data.kind === 'selfie' ? v.selfie_file : v.voice_file)) return reply.code(410).send({ error: 'media_deleted' })
     const file = p.data.kind === 'selfie' ? v.selfie_file : v.voice_file
     const mime = p.data.kind === 'selfie' ? v.selfie_mime : v.voice_mime
     const full = path.resolve(UPLOAD_DIR, file)
@@ -176,6 +212,9 @@ export async function verificationRoutes(app: FastifyInstance) {
     })
     if (outcome === 'not_found') return reply.code(404).send({ error: 'not_found' })
     if (outcome === 'already_decided') return reply.code(409).send({ error: 'already_decided' })
+    const subject = db.prepare('SELECT user_id FROM verifications WHERE id = ?').get(id.data) as { user_id: string } | undefined
+    track(body.data.decision === 'approve' ? 'verified' : 'verification_rejected', subject?.user_id ?? null, { by: reviewer })
+    await deleteDecidedVerificationMedia(id.data) // the selfie and voice clip are not kept after the decision
     return { ok: true }
   })
 }

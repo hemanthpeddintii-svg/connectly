@@ -15,7 +15,7 @@ const dbFile = () => path.join(dir, 't.db')
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)])
 const WEBM = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(64)])
 
-type Account = { token: string; bumpId: string }
+type Account = { token: string; memberId: string }
 
 async function call(method: string, url: string, opts: { token?: string; json?: unknown; form?: FormData } = {}) {
   const headers: Record<string, string> = {}
@@ -33,7 +33,7 @@ async function signup(email: string, name: string, gender: Gender = 'man'): Prom
   const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: 'Tr0ub4dor&3xKq', name, age: 30, gender } })
   assert.equal(r.status, 200)
   const b = await json(r)
-  return { token: b.token, bumpId: b.user.bumpId }
+  return { token: b.token, memberId: b.user.memberId }
 }
 
 let adminToken = ''
@@ -46,7 +46,7 @@ async function activeUser(email: string, name: string, gender: Gender = 'man'): 
   f.set('voice', new Blob([new Uint8Array(WEBM)], { type: 'audio/webm' }), 'v.webm')
   assert.equal((await call('POST', '/verification', { token: u.token, form: f })).status, 201)
   const list = await json(await call('GET', '/admin/verifications', { token: adminToken }))
-  const item = list.find((x: any) => x.user.bumpId === u.bumpId)
+  const item = list.find((x: any) => x.user.memberId === u.memberId)
   assert.equal((await call('POST', `/admin/verifications/${item.id}/decision`, { token: adminToken, json: { decision: 'approve' } })).status, 200)
   return u
 }
@@ -58,12 +58,12 @@ const giveCredits = (u: Account, email: string, n = 5) => {
   d.close()
   return u
 }
-const sendRequest = (from: Account, to: Account, note = 'hi') => call('POST', '/requests', { token: from.token, json: { bumpId: to.bumpId, note } })
+const sendRequest = (from: Account, to: Account, note = 'hi') => call('POST', '/requests', { token: from.token, json: { memberId: to.memberId, note } })
 const wallNames = async (u: Account) => (await json(await call('GET', '/profiles', { token: u.token }))).map((p: any) => p.name) as string[]
 const connNames = async (u: Account) => (await json(await call('GET', '/connections', { token: u.token }))).map((c: any) => c.profile.name) as string[]
-const block = (u: Account, target: Account) => call('POST', '/blocks', { token: u.token, json: { bumpId: target.bumpId } })
+const block = (u: Account, target: Account) => call('POST', '/blocks', { token: u.token, json: { memberId: target.memberId } })
 const report = (u: Account, target: Account | string, reason = 'spam', details?: string) =>
-  call('POST', '/reports', { token: u.token, json: { bumpId: typeof target === 'string' ? target : target.bumpId, reason, details } })
+  call('POST', '/reports', { token: u.token, json: { memberId: typeof target === 'string' ? target : target.memberId, reason, details } })
 
 // man (needs email for credits) sends a request, woman accepts; returns the connection id
 async function match(man: Account, manEmail: string, woman: Account) {
@@ -105,11 +105,11 @@ describe('blocks', () => {
   it('require an active member', async () => {
     const un = await signup('unv@x.test', 'Unv')
     const target = await activeUser('t0@x.test', 'T0')
-    for (const [m, u, j] of [['POST', '/blocks', { bumpId: target.bumpId }], ['GET', '/blocks', undefined], ['DELETE', `/blocks/${target.bumpId}`, undefined]] as const) {
+    for (const [m, u, j] of [['POST', '/blocks', { memberId: target.memberId }], ['GET', '/blocks', undefined], ['DELETE', `/blocks/${target.memberId}`, undefined]] as const) {
       const r = await call(m, u, { token: un.token, json: j })
       assert.equal(r.status, 403, `${m} ${u}`)
     }
-    assert.equal((await call('POST', '/blocks', { json: { bumpId: target.bumpId } })).status, 401)
+    assert.equal((await call('POST', '/blocks', { json: { memberId: target.memberId } })).status, 401)
   })
 
   it('block and unblock are idempotent; list is newest first', async () => {
@@ -122,9 +122,9 @@ describe('blocks', () => {
     assert.equal((await block(me, y)).status, 200)
     const list = await json(await call('GET', '/blocks', { token: me.token }))
     assert.deepEqual(list.map((b: any) => b.name), ['Yuri', 'Xena'])
-    assert.deepEqual(Object.keys(list[0]).sort(), ['age', 'bumpId', 'name'])
-    assert.equal((await call('DELETE', `/blocks/${x.bumpId}`, { token: me.token })).status, 200)
-    assert.equal((await call('DELETE', `/blocks/${x.bumpId}`, { token: me.token })).status, 200, 'second unblock is a no-op')
+    assert.deepEqual(Object.keys(list[0]).sort(), ['age', 'memberId', 'name'])
+    assert.equal((await call('DELETE', `/blocks/${x.memberId}`, { token: me.token })).status, 200)
+    assert.equal((await call('DELETE', `/blocks/${x.memberId}`, { token: me.token })).status, 200, 'second unblock is a no-op')
     assert.deepEqual((await json(await call('GET', '/blocks', { token: me.token }))).map((b: any) => b.name), ['Yuri'])
     // the blocked party sees nothing about it
     assert.deepEqual(await json(await call('GET', '/blocks', { token: y.token })), [])
@@ -134,7 +134,7 @@ describe('blocks', () => {
     const me = await activeUser('b4@x.test', 'Me4')
     const un = await signup('b5@x.test', 'Unverified')
     assert.equal((await block(me, me)).status, 400)
-    assert.equal((await call('POST', '/blocks', { token: me.token, json: { bumpId: 'NOSUCH00' } })).status, 404)
+    assert.equal((await call('POST', '/blocks', { token: me.token, json: { memberId: 'NOSUCH00' } })).status, 404)
     assert.equal((await block(me, un)).status, 404)
     assert.equal((await call('POST', '/blocks', { token: me.token, json: {} })).status, 400)
     assert.deepEqual(await json(await call('GET', '/blocks', { token: me.token })), [])
@@ -165,10 +165,10 @@ describe('blocks', () => {
     assert.ok(!(await connNames(w1)).includes('HideM1'), 'blocked member no longer sees the connection')
 
     // unblocking restores visibility
-    assert.equal((await call('DELETE', `/blocks/${w1.bumpId}`, { token: m1.token })).status, 200)
+    assert.equal((await call('DELETE', `/blocks/${w1.memberId}`, { token: m1.token })).status, 200)
     assert.ok((await connNames(m1)).includes('HideW1'))
     assert.ok((await connNames(w1)).includes('HideM1'))
-    assert.equal((await call('DELETE', `/blocks/${w2.bumpId}`, { token: m1.token })).status, 200)
+    assert.equal((await call('DELETE', `/blocks/${w2.memberId}`, { token: m1.token })).status, 200)
     assert.ok((await wallNames(m1)).includes('HideW2'))
   })
 
@@ -176,14 +176,14 @@ describe('blocks', () => {
     const m = await activeUser('l1@x.test', 'SkipM')
     const w = await activeWoman('l2@x.test', 'SkipW')
     giveCredits(m, 'l1@x.test')
-    const ghost = await call('POST', '/actions', { token: m.token, json: { bumpId: 'NOSUCH00', action: 'skip' } })
+    const ghost = await call('POST', '/actions', { token: m.token, json: { memberId: 'NOSUCH00', action: 'skip' } })
     assert.equal(ghost.status, 404)
     assert.equal((await block(m, w)).status, 200)
     const req = await sendRequest(m, w)
     assert.equal(req.status, 404)
     assert.deepEqual(await json(req), { error: 'not_found' })
     // woman blocks the man instead
-    assert.equal((await call('DELETE', `/blocks/${w.bumpId}`, { token: m.token })).status, 200)
+    assert.equal((await call('DELETE', `/blocks/${w.memberId}`, { token: m.token })).status, 200)
     assert.equal((await block(w, m)).status, 200)
     assert.equal((await sendRequest(m, w)).status, 404)
     assert.equal((await json(await call('GET', '/me', { token: m.token }))).requestCredits, 5, 'no credit spent')
@@ -219,7 +219,7 @@ describe('blocks', () => {
     assert.equal(history.length, 1, 'existing history stays readable')
 
     // the other direction: admin2 blocks the member, then unblocking restores sending
-    assert.equal((await call('DELETE', `/blocks/${admin2.bumpId}`, { token: m.token })).status, 200)
+    assert.equal((await call('DELETE', `/blocks/${admin2.memberId}`, { token: m.token })).status, 200)
     assert.equal((await send(admin2)).status, 200)
     assert.equal((await block(admin2, m)).status, 200)
     r = await send(admin2)
@@ -237,9 +237,9 @@ describe('reports', () => {
     assert.equal((await report(me, un)).status, 404, 'unverified target')
     assert.equal((await report(me, t, 'rude')).status, 400, 'unknown reason')
     assert.equal((await report(me, t, 'other', 'x'.repeat(501))).status, 400, 'details too long')
-    assert.equal((await call('POST', '/reports', { token: me.token, json: { bumpId: t.bumpId } })).status, 400, 'missing reason')
-    assert.equal((await call('POST', '/reports', { json: { bumpId: t.bumpId, reason: 'spam' } })).status, 401)
-    assert.equal((await call('POST', '/reports', { token: un.token, json: { bumpId: t.bumpId, reason: 'spam' } })).status, 403)
+    assert.equal((await call('POST', '/reports', { token: me.token, json: { memberId: t.memberId } })).status, 400, 'missing reason')
+    assert.equal((await call('POST', '/reports', { json: { memberId: t.memberId, reason: 'spam' } })).status, 401)
+    assert.equal((await call('POST', '/reports', { token: un.token, json: { memberId: t.memberId, reason: 'spam' } })).status, 403)
     assert.equal((await report(me, t, 'other', 'x'.repeat(500))).status, 201, 'exactly 500 is fine')
   })
 
@@ -251,7 +251,7 @@ describe('reports', () => {
     assert.equal(r.status, 409)
     assert.equal((await json(r)).error, 'already_reported')
 
-    const item = (await openReports()).find((x) => x.reported.bumpId === t.bumpId)
+    const item = (await openReports()).find((x) => x.reported.memberId === t.memberId)
     assert.equal((await call('POST', `/admin/reports/${item.report.id}/decision`, { token: adminToken, json: { decision: 'dismiss' } })).status, 200)
     assert.equal((await report(me, t, 'harassment')).status, 201, 'can report again once the first is decided')
   })
@@ -277,7 +277,7 @@ describe('reports', () => {
     const surfaces = ['/me', '/connections', '/blocks']
     for (const s of surfaces) {
       const text = await (await call('GET', s, { token: t.token })).text()
-      assert.ok(!text.includes(rep.bumpId) && !text.includes('private details') && !text.includes('report'), s)
+      assert.ok(!text.includes(rep.memberId) && !text.includes('private details') && !text.includes('report'), s)
     }
     for (const s of ['/admin/reports', '/admin/reports/x/decision']) {
       assert.equal((await call(s.endsWith('decision') ? 'POST' : 'GET', s, { token: t.token, json: s.endsWith('decision') ? {} : undefined })).status, 403, s)
@@ -290,7 +290,7 @@ describe('admin review', () => {
     const u = await activeUser('z1@x.test', 'Plain')
     assert.equal((await call('GET', '/admin/reports', { token: u.token })).status, 403)
     assert.equal((await call('POST', `/admin/reports/${crypto.randomUUID()}/decision`, { token: u.token, json: { decision: 'dismiss' } })).status, 403)
-    assert.equal((await call('POST', `/admin/suspensions/${u.bumpId}/lift`, { token: u.token })).status, 403)
+    assert.equal((await call('POST', `/admin/suspensions/${u.memberId}/lift`, { token: u.token })).status, 403)
     assert.equal((await call('GET', '/admin/reports')).status, 401)
   })
 
@@ -300,26 +300,26 @@ describe('admin review', () => {
     const other = await activeUser('y3@x.test', 'Lister2')
     await report(rep, t, 'fake_profile', 'looks stolen')
     await report(other, t, 'underage')
-    const items = (await openReports()).filter((x) => x.reported.bumpId === t.bumpId)
+    const items = (await openReports()).filter((x) => x.reported.memberId === t.memberId)
     assert.equal(items.length, 2)
-    const first = items.find((x) => x.reporter.bumpId === rep.bumpId)
+    const first = items.find((x) => x.reporter.memberId === rep.memberId)
     assert.equal(first.report.reason, 'fake_profile')
     assert.equal(first.report.details, 'looks stolen')
     assert.equal(first.report.status, 'open')
-    assert.deepEqual(first.reporter, { bumpId: rep.bumpId, name: 'Lister' })
+    assert.deepEqual(first.reporter, { memberId: rep.memberId, name: 'Lister' })
     assert.equal(first.reported.name, 'Listed')
     assert.equal(first.reported.email, 'y2@x.test')
     assert.equal(first.reported.suspended, false)
     assert.equal(first.reported.openReportCount, 2)
     assert.equal((await call('GET', '/admin/reports?status=bogus', { token: adminToken })).status, 400)
-    assert.deepEqual((await openReports('actioned')).filter((x) => x.reported.bumpId === t.bumpId), [])
+    assert.deepEqual((await openReports('actioned')).filter((x) => x.reported.memberId === t.memberId), [])
   })
 
   it('decision validation, dismissal and race safety', async () => {
     const rep = await activeUser('w1@x.test', 'Dec1')
     const t = await activeUser('w2@x.test', 'Dec2')
     await report(rep, t)
-    const id = (await openReports()).find((x) => x.reported.bumpId === t.bumpId).report.id
+    const id = (await openReports()).find((x) => x.reported.memberId === t.memberId).report.id
     const decide = (j: unknown) => call('POST', `/admin/reports/${id}/decision`, { token: adminToken, json: j })
 
     assert.equal((await decide({ decision: 'action', suspend: false })).status, 400, 'note required for action')
@@ -346,7 +346,7 @@ describe('admin review', () => {
     assert.ok((await wallNames(rep)).includes('BadActor'))
 
     await report(rep, bad, 'harassment')
-    const id = (await openReports()).find((x) => x.reported.bumpId === bad.bumpId).report.id
+    const id = (await openReports()).find((x) => x.reported.memberId === bad.memberId).report.id
     const r = await call('POST', `/admin/reports/${id}/decision`, { token: adminToken, json: { decision: 'action', note: 'Confirmed harassment', suspend: true } })
     assert.equal(r.status, 200)
 
@@ -364,10 +364,80 @@ describe('admin review', () => {
     giveCredits(rep, 's1@x.test')
     assert.equal((await sendRequest(rep, bad)).status, 404)
 
-    assert.equal((await call('POST', `/admin/suspensions/${bad.bumpId}/lift`, { token: adminToken })).status, 200)
-    assert.equal((await call('POST', `/admin/suspensions/${bad.bumpId}/lift`, { token: adminToken })).status, 404, 'nothing left to lift')
+    assert.equal((await call('POST', `/admin/suspensions/${bad.memberId}/lift`, { token: adminToken })).status, 200)
+    assert.equal((await call('POST', `/admin/suspensions/${bad.memberId}/lift`, { token: adminToken })).status, 404, 'nothing left to lift')
     assert.ok((await wallNames(rep)).includes('BadActor'), 'visible again')
     assert.equal((await sendRequest(rep, bad)).status, 201)
+  })
+
+  describe('report evidence', () => {
+    const say = (conn: string, u: Account, body: string) => call('POST', `/connections/${conn}/messages`, { token: u.token, json: { body } })
+    const evidenceOf = async (reportId: string) => json(await call('GET', `/admin/reports/${reportId}/evidence`, { token: adminToken }))
+    const reportIdFor = async (reported: Account) => (await openReports()).find((x) => x.reported.memberId === reported.memberId).report.id as string
+
+    it('saves the request note and recent messages when a report is filed, and the snapshot stays fixed', async () => {
+      const man = await activeUser('ev-m@x.test', 'EvMan')
+      const woman = await activeWoman('ev-w@x.test', 'EvWoman')
+      giveCredits(man, 'ev-m@x.test')
+      const sent = await sendRequest(man, woman, 'Could you share your number?')
+      const accepted = await json(await call('POST', `/requests/${(await json(sent)).id}/decision`, { token: woman.token, json: { decision: 'accept' } }))
+      const conn = accepted.connectionId as string
+      assert.equal((await say(conn, man, 'one')).status, 200)
+      assert.equal((await say(conn, woman, 'two')).status, 200)
+      assert.equal((await say(conn, man, 'three')).status, 200)
+      assert.equal((await report(woman, man, 'harassment', 'asked for my number')).status, 201)
+      const id = await reportIdFor(man)
+
+      const ev = await evidenceOf(id)
+      assert.equal(ev.available, true)
+      assert.deepEqual({ note: ev.request.note, from: ev.request.from }, { note: 'Could you share your number?', from: 'reported' })
+      assert.deepEqual(ev.messages.map((m: any) => [m.from, m.body]), [['reported', 'one'], ['reporter', 'two'], ['reported', 'three']])
+      assert.equal(ev.truncated, false)
+      // nothing identifying beyond who spoke: no emails, ids or member ids in the snapshot
+      const raw = JSON.stringify(ev)
+      for (const leak of ['ev-m@x.test', 'ev-w@x.test', man.memberId, woman.memberId]) assert.ok(!raw.includes(leak), `evidence leaks ${leak}`)
+
+      // later messages are not added to the snapshot
+      assert.equal((await say(conn, man, 'four')).status, 200)
+      assert.equal((await evidenceOf(id)).messages.length, 3)
+
+      // opening the evidence is written to the audit log
+      const d = new DatabaseSync(dbFile())
+      const n = (d.prepare("SELECT COUNT(*) AS n FROM admin_audit WHERE action = 'report.evidence_viewed'").get() as any).n
+      d.close()
+      assert.ok(n >= 2, 'each view is audited')
+    })
+
+    it('a report about someone you never chatted with saves an empty conversation', async () => {
+      const a = await activeUser('ev-a@x.test', 'EvA')
+      const b = await activeWoman('ev-b@x.test', 'EvB')
+      assert.equal((await report(b, a, 'spam')).status, 201)
+      const ev = await evidenceOf(await reportIdFor(a))
+      assert.equal(ev.available, true)
+      assert.equal(ev.request, null)
+      assert.deepEqual(ev.messages, [])
+    })
+
+    it('keeps only the most recent messages and says so', async () => {
+      const man = await activeUser('ev-m2@x.test', 'EvMan2')
+      const woman = await activeWoman('ev-w2@x.test', 'EvWoman2')
+      const conn = await match(man, 'ev-m2@x.test', woman)
+      for (let i = 1; i <= 35; i++) assert.equal((await say(conn, i % 2 ? man : woman, `m${i}`)).status, 200)
+      assert.equal((await report(woman, man, 'harassment')).status, 201)
+      const ev = await evidenceOf(await reportIdFor(man))
+      assert.equal(ev.messages.length, 30)
+      assert.equal(ev.truncated, true)
+      assert.equal(ev.messages[0].body, 'm6')
+      assert.equal(ev.messages[29].body, 'm35')
+    })
+
+    it('only an admin can read it, and bad or unknown ids are refused', async () => {
+      const u = await activeUser('ev-x@x.test', 'EvX')
+      assert.equal((await call('GET', '/admin/reports/00000000-0000-4000-8000-000000000000/evidence')).status, 401)
+      assert.equal((await call('GET', '/admin/reports/00000000-0000-4000-8000-000000000000/evidence', { token: u.token })).status, 403)
+      assert.equal((await call('GET', '/admin/reports/not-a-uuid/evidence', { token: adminToken })).status, 400)
+      assert.equal((await call('GET', '/admin/reports/00000000-0000-4000-8000-000000000000/evidence', { token: adminToken })).status, 404)
+    })
   })
 
   it('a suspended man cannot send a request', async () => {
@@ -376,12 +446,16 @@ describe('admin review', () => {
     const w = await activeWoman('u3@x.test', 'SusWoman')
     giveCredits(bad, 'u2@x.test')
     await report(rep, bad, 'harassment')
-    const id = (await openReports()).find((x) => x.reported.bumpId === bad.bumpId).report.id
+    const id = (await openReports()).find((x) => x.reported.memberId === bad.memberId).report.id
     assert.equal((await call('POST', `/admin/reports/${id}/decision`, { token: adminToken, json: { decision: 'action', note: 'bad', suspend: true } })).status, 200)
     const r = await sendRequest(bad, w)
     assert.equal(r.status, 403)
     assert.equal((await json(r)).error, 'suspended')
-    await call('POST', `/admin/suspensions/${bad.bumpId}/lift`, { token: adminToken })
+    // the member's own /me says so, so the app can explain why sending fails
+    assert.equal((await json(await call('GET', '/me', { token: bad.token }))).suspended, true)
+    assert.equal((await json(await call('GET', '/me', { token: w.token }))).suspended, false)
+    await call('POST', `/admin/suspensions/${bad.memberId}/lift`, { token: adminToken })
+    assert.equal((await json(await call('GET', '/me', { token: bad.token }))).suspended, false)
     assert.equal((await sendRequest(bad, w)).status, 201)
   })
 
@@ -391,12 +465,12 @@ describe('admin review', () => {
     const peer = await activeWoman('k2@x.test', 'Peer')
     const conn = await match(sender, 'admin2@x.test', peer)
     await report(rep, sender, 'spam')
-    const id = (await openReports()).find((x) => x.reported.bumpId === sender.bumpId).report.id
+    const id = (await openReports()).find((x) => x.reported.memberId === sender.memberId).report.id
     await call('POST', `/admin/reports/${id}/decision`, { token: adminToken, json: { decision: 'action', note: 'spam', suspend: true } })
     const r = await call('POST', `/connections/${conn}/messages`, { token: sender.token, json: { body: 'hi' } })
     assert.equal(r.status, 403)
     assert.equal((await json(r)).error, 'suspended')
-    await call('POST', `/admin/suspensions/${sender.bumpId}/lift`, { token: adminToken })
+    await call('POST', `/admin/suspensions/${sender.memberId}/lift`, { token: adminToken })
     assert.equal((await call('POST', `/connections/${conn}/messages`, { token: sender.token, json: { body: 'hi' } })).status, 200)
   })
 
@@ -404,7 +478,7 @@ describe('admin review', () => {
     const rep = await activeUser('n1@x.test', 'NRep')
     const t = await activeWoman('n2@x.test', 'NTgt')
     await report(rep, t)
-    const id = (await openReports()).find((x) => x.reported.bumpId === t.bumpId).report.id
+    const id = (await openReports()).find((x) => x.reported.memberId === t.memberId).report.id
     assert.equal((await call('POST', `/admin/reports/${id}/decision`, { token: adminToken, json: { decision: 'action', note: 'warned', suspend: false } })).status, 200)
     assert.ok((await wallNames(rep)).includes('NTgt'))
     assert.equal((await openReports('actioned')).find((x) => x.report.id === id).reported.suspended, false)

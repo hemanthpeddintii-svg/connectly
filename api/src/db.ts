@@ -7,7 +7,7 @@ db.exec(`
   PRAGMA foreign_keys = ON;
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
-    bump_id TEXT NOT NULL UNIQUE,
+    member_id TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -82,6 +82,34 @@ db.exec(`
 `)
 
 // Additive migrations for databases created before verification existed.
+// Older databases called the public member id column `bump_id`; rename it in place (data is untouched).
+{
+  const cols = (db.prepare('PRAGMA table_info(users)').all() as { name: string }[]).map((c) => c.name)
+  if (cols.includes('bump_id') && !cols.includes('member_id')) db.exec('ALTER TABLE users RENAME COLUMN bump_id TO member_id')
+}
+// When a decided verification's selfie and voice clip were deleted from disk (see deleteDecidedVerificationMedia).
+{
+  const cols = (db.prepare('PRAGMA table_info(verifications)').all() as { name: string }[]).map((c) => c.name)
+  if (!cols.includes('media_deleted_at')) db.exec('ALTER TABLE verifications ADD COLUMN media_deleted_at INTEGER')
+}
+// Refunds are recorded beside the payment (the status check on payments is left alone): running totals on the row plus a history table.
+{
+  const cols = (db.prepare('PRAGMA table_info(payments)').all() as { name: string }[]).map((c) => c.name)
+  if (!cols.includes('refunded_paise')) db.exec('ALTER TABLE payments ADD COLUMN refunded_paise INTEGER NOT NULL DEFAULT 0')
+  if (!cols.includes('refunded_credits')) db.exec('ALTER TABLE payments ADD COLUMN refunded_credits INTEGER NOT NULL DEFAULT 0')
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS refunds (
+      id TEXT PRIMARY KEY,
+      payment_id TEXT NOT NULL REFERENCES payments(id),
+      amount_paise INTEGER NOT NULL,
+      credits INTEGER NOT NULL,
+      note TEXT NOT NULL,
+      created_by TEXT NOT NULL REFERENCES users(id),
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_refunds_payment ON refunds(payment_id, created_at);
+  `)
+}
 const userCols = (db.prepare('PRAGMA table_info(users)').all() as { name: string }[]).map((c) => c.name)
 if (!userCols.includes('role')) db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
 if (!userCols.includes('membership_expires_at')) db.exec('ALTER TABLE users ADD COLUMN membership_expires_at INTEGER')
@@ -90,8 +118,28 @@ if (!userCols.includes('gender')) db.exec('ALTER TABLE users ADD COLUMN gender T
 if (!userCols.includes('request_credits')) db.exec('ALTER TABLE users ADD COLUMN request_credits INTEGER NOT NULL DEFAULT 0')
 if (!userCols.includes('rejection_reason')) db.exec('ALTER TABLE users ADD COLUMN rejection_reason TEXT')
 if (!userCols.includes('city')) db.exec("ALTER TABLE users ADD COLUMN city TEXT NOT NULL DEFAULT ''")
+if (!userCols.includes('languages')) db.exec("ALTER TABLE users ADD COLUMN languages TEXT NOT NULL DEFAULT '[]'")
 if (!userCols.includes('looking_for')) db.exec("ALTER TABLE users ADD COLUMN looking_for TEXT NOT NULL DEFAULT ''")
 if (!userCols.includes('terms_agreed_at')) db.exec('ALTER TABLE users ADD COLUMN terms_agreed_at INTEGER')
+if (!userCols.includes('invited_by')) db.exec('ALTER TABLE users ADD COLUMN invited_by TEXT')
+if (!userCols.includes('beta_credits_granted')) db.exec('ALTER TABLE users ADD COLUMN beta_credits_granted INTEGER NOT NULL DEFAULT 0')
+if (!userCols.includes('price_interest')) db.exec('ALTER TABLE users ADD COLUMN price_interest TEXT')
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS invite_codes (
+    code TEXT PRIMARY KEY,
+    label TEXT NOT NULL DEFAULT '',
+    max_uses INTEGER NOT NULL DEFAULT 1,
+    uses INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS user_activity (
+    user_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    PRIMARY KEY (user_id, day)
+  );
+`)
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS message_reads (
@@ -140,12 +188,85 @@ if (!msgCols.includes('attachment_file')) db.exec('ALTER TABLE messages ADD COLU
 if (!msgCols.includes('attachment_mime')) db.exec('ALTER TABLE messages ADD COLUMN attachment_mime TEXT')
 if (!msgCols.includes('attachment_duration_ms')) db.exec('ALTER TABLE messages ADD COLUMN attachment_duration_ms INTEGER')
 
+// ---- tracking: events, attribution, campaigns, waitlist, launch tracker ----
+if (!userCols.includes('source_kind')) {
+  db.exec('ALTER TABLE users ADD COLUMN source_kind TEXT')
+  db.exec('ALTER TABLE users ADD COLUMN source_ref TEXT')
+  db.exec("UPDATE users SET source_kind = 'member', source_ref = invited_by WHERE invited_by IS NOT NULL")
+  db.exec("UPDATE users SET source_kind = 'direct' WHERE source_kind IS NULL")
+}
+const inviteCols = (db.prepare('PRAGMA table_info(invite_codes)').all() as { name: string }[]).map((c) => c.name)
+if (!inviteCols.includes('campaign_id')) db.exec('ALTER TABLE invite_codes ADD COLUMN campaign_id TEXT')
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT,
+    type TEXT NOT NULL,
+    meta TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_events_type ON events(type, created_at);
+  CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id);
+  CREATE TABLE IF NOT EXISTS campaigns (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    topic TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    cost_paise INTEGER NOT NULL DEFAULT 0,
+    posted_at TEXT,
+    code TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS campaign_clicks (
+    campaign_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (campaign_id, day)
+  );
+  CREATE TABLE IF NOT EXISTS waitlist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    city TEXT NOT NULL DEFAULT '',
+    gender TEXT,
+    source TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS milestones (
+    key TEXT PRIMARY KEY,
+    done INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    done_at TEXT,
+    by TEXT
+  );
+`)
+
+/**
+ * Appends to the event log. Never throws. meta must hold ids, kinds and counts only: never message text,
+ * selfie/voice content, emails or names.
+ */
+export function track(type: string, userId: string | null, meta: Record<string, string | number | boolean | null> = {}) {
+  try {
+    db.prepare('INSERT INTO events (user_id,type,meta,created_at) VALUES (?,?,?,?)')
+      .run(userId, type, JSON.stringify(meta), new Date().toISOString())
+  } catch { /* analytics must never break a request */ }
+}
+
+/** Like track, but only the first time this user has this event type. */
+export function trackOnce(type: string, userId: string, meta: Record<string, string | number | boolean | null> = {}) {
+  try {
+    if (db.prepare('SELECT 1 FROM events WHERE user_id = ? AND type = ? LIMIT 1').get(userId, type)) return
+  } catch { return }
+  track(type, userId, meta)
+}
+
 /** User status lifecycle: unverified -> pending -> active | rejected (-> pending again on resubmit). */
 export type UserStatus = 'unverified' | 'pending' | 'active' | 'rejected'
 
 export type UserRow = {
   id: string
-  bump_id: string
+  member_id: string
   email: string
   password_hash: string
   name: string
@@ -159,14 +280,20 @@ export type UserRow = {
   gender: 'man' | 'woman' | null
   request_credits: number
   city: string
+  languages: string
   looking_for: string
   terms_agreed_at: number | null
+  invited_by: string | null
+  beta_credits_granted: number
+  price_interest: string | null
+  source_kind: 'campaign' | 'member' | 'batch' | 'direct' | null
+  source_ref: string | null
   token_version: number
   created_at: number
 }
 
 export const newId = () => randomUUID()
-export const newBumpId = () => randomBytes(4).toString('hex').toUpperCase()
+export const newMemberId = () => randomBytes(4).toString('hex').toUpperCase()
 
 export function hashPassword(password: string): string {
   const salt = randomBytes(16)
@@ -185,12 +312,13 @@ export function verifyPassword(password: string, stored: string): boolean {
 /** Public shape of a user; never includes email or password hash. */
 export function publicProfile(u: UserRow) {
   return {
-    bumpId: u.bump_id,
+    memberId: u.member_id,
     name: u.name,
     age: u.age,
     bio: u.bio,
     interests: JSON.parse(u.interests) as string[],
     city: u.city ?? '',
+    languages: JSON.parse(u.languages ?? '[]') as string[],
     lookingFor: u.looking_for ?? '',
   }
 }
@@ -206,5 +334,12 @@ export function selfProfile(u: UserRow) {
     gender: u.gender,
     requestCredits: u.request_credits,
     termsAgreed: u.terms_agreed_at != null,
+    priceInterest: u.price_interest ?? null,
+    // True while an admin suspension is in force, so the app can explain why sending is blocked.
+    suspended: isSuspendedUser(u.id),
   }
+}
+
+function isSuspendedUser(userId: string): boolean {
+  try { return !!db.prepare('SELECT 1 FROM suspensions WHERE user_id = ?').get(userId) } catch { return false }
 }

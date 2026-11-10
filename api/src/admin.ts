@@ -5,16 +5,16 @@ import { authed, requireAdmin } from './guards.ts'
 import { getSettings, writeSetting } from './plans.ts'
 import { tx } from './verification.ts'
 
-const bumpParam = z.string().regex(/^[0-9A-Za-z]{1,16}$/)
+const memberParam = z.string().regex(/^[0-9A-Za-z]{1,16}$/)
 const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`)
 
 // Aliased columns throughout: users.* next to other tables' id/created_at once returned the wrong ids.
-const MEMBER_COLS = `u.bump_id AS bump_id, u.name AS name, u.age AS age, u.email AS email, u.gender AS gender, u.role AS role,
+const MEMBER_COLS = `u.member_id AS member_id, u.name AS name, u.age AS age, u.email AS email, u.gender AS gender, u.role AS role,
   u.status AS status, u.request_credits AS request_credits, u.created_at AS joined_at, u.city AS city, u.looking_for AS looking_for,
   u.rejection_reason AS rejection_reason, EXISTS (SELECT 1 FROM suspensions s WHERE s.user_id = u.id) AS suspended`
 
 const member = (r: any) => ({
-  bumpId: r.bump_id as string, name: r.name as string, age: r.age as number, email: r.email as string,
+  memberId: r.member_id as string, name: r.name as string, age: r.age as number, email: r.email as string,
   gender: r.gender as string | null, role: r.role as string, status: r.status as string,
   requestCredits: r.request_credits as number, joinedAt: r.joined_at as number, suspended: !!r.suspended,
 })
@@ -31,6 +31,38 @@ const settingsSchema = z.object({
     upiId: z.string().trim().max(100).nullable().transform((v) => v || null),
   }),
   quickReasons: z.object({ verification: reasonList, payment: reasonList }),
+  invite_only: z.boolean().optional(),
+  beta_free: z.boolean().optional(),
+  beta_free_requests: z.number().int().min(0).max(500).optional(),
+  cap_women: z.number().int().min(0).max(1_000_000).optional(),
+  cap_men: z.number().int().min(0).max(1_000_000).optional(),
+  beta_city: z.string().trim().max(60).optional(),
+  pay_cap_men: z.number().int().min(0).max(1_000_000).optional(),
+  pay_cap_rupees: z.number().int().min(0).max(100_000_000).optional(),
+  // Contact details are shown publicly, so they are checked: an email address, and a phone number of 8 to 15 digits.
+  support_email: z.string().trim().max(100).refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'bad email').optional(),
+  support_whatsapp: z.string().trim().max(25).refine((v) => v === '' || /^\+?[0-9 ()-]{8,25}$/.test(v) && v.replace(/\D/g, '').length >= 8 && v.replace(/\D/g, '').length <= 15, 'bad number').optional(),
+})
+// The web app may send either snake_case or camelCase beta keys.
+const betaAliases: Record<string, string> = {
+  inviteOnly: 'invite_only', betaFree: 'beta_free', betaFreeRequests: 'beta_free_requests',
+  capWomen: 'cap_women', capMen: 'cap_men', betaCity: 'beta_city',
+  payCapMen: 'pay_cap_men', payCapRupees: 'pay_cap_rupees', supportEmail: 'support_email', supportWhatsapp: 'support_whatsapp',
+}
+const normalizeSettingsBody = (b: unknown) => {
+  if (!b || typeof b !== 'object') return b
+  const out: Record<string, unknown> = { ...(b as Record<string, unknown>) }
+  for (const [camel, snake] of Object.entries(betaAliases)) {
+    // The camelCase key is the one the admin page sets on purpose (it also echoes the old snake_case values back), so it wins.
+    if (camel in out) { out[snake] = out[camel]; delete out[camel] }
+  }
+  return out
+}
+const withCamel = (s: ReturnType<typeof getSettings>) => ({
+  ...s,
+  inviteOnly: s.invite_only, betaFree: s.beta_free, betaFreeRequests: s.beta_free_requests,
+  capWomen: s.cap_women, capMen: s.cap_men, betaCity: s.beta_city,
+  payCapMen: s.pay_cap_men, payCapRupees: s.pay_cap_rupees, supportEmail: s.support_email, supportWhatsapp: s.support_whatsapp,
 })
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -41,14 +73,14 @@ export async function adminRoutes(app: FastifyInstance) {
     const oldest = (table: string, where: string) =>
       (db.prepare(`SELECT MIN(created_at) AS t FROM ${table} WHERE ${where}`).get() as { t: number | null }).t
     const recent = db.prepare(`
-      SELECT kind, bump_id, name, decision, admin_name, at FROM (
-        SELECT 'verification' AS kind, t.bump_id AS bump_id, t.name AS name, v.status AS decision, a.name AS admin_name, v.reviewed_at AS at
+      SELECT kind, member_id, name, decision, admin_name, at FROM (
+        SELECT 'verification' AS kind, t.member_id AS member_id, t.name AS name, v.status AS decision, a.name AS admin_name, v.reviewed_at AS at
           FROM verifications v JOIN users t ON t.id = v.user_id LEFT JOIN users a ON a.id = v.reviewed_by WHERE v.status != 'pending'
         UNION ALL
-        SELECT 'payment', t.bump_id, t.name, p.status, a.name, p.reviewed_at
+        SELECT 'payment', t.member_id, t.name, p.status, a.name, p.reviewed_at
           FROM payments p JOIN users t ON t.id = p.user_id LEFT JOIN users a ON a.id = p.reviewed_by WHERE p.status != 'pending'
         UNION ALL
-        SELECT 'report', t.bump_id, t.name, r.status, a.name, r.reviewed_at
+        SELECT 'report', t.member_id, t.name, r.status, a.name, r.reviewed_at
           FROM reports r JOIN users t ON t.id = r.reported_id LEFT JOIN users a ON a.id = r.reviewed_by WHERE r.status != 'open'
       ) WHERE at IS NOT NULL ORDER BY at DESC LIMIT 8`).all() as any[]
     return {
@@ -62,7 +94,7 @@ export async function adminRoutes(app: FastifyInstance) {
       },
       recent: recent.map((r) => ({
         kind: r.kind as 'verification' | 'payment' | 'report',
-        member: { bumpId: r.bump_id as string, name: r.name as string },
+        member: { memberId: r.member_id as string, name: r.name as string },
         decision: r.decision as string, by: (r.admin_name as string | null) ?? '', at: r.at as number,
       })),
     }
@@ -82,7 +114,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const params: (string | number)[] = []
     if (q.data.q) {
       const like = `%${likeEscape(q.data.q.toLowerCase())}%`
-      where.push("(lower(u.name) LIKE ? ESCAPE '\\' OR lower(u.email) LIKE ? ESCAPE '\\' OR lower(u.bump_id) LIKE ? ESCAPE '\\')")
+      where.push("(lower(u.name) LIKE ? ESCAPE '\\' OR lower(u.email) LIKE ? ESCAPE '\\' OR lower(u.member_id) LIKE ? ESCAPE '\\')")
       params.push(like, like, like)
     }
     for (const [col, v] of [['status', q.data.status], ['role', q.data.role], ['gender', q.data.gender]] as const) {
@@ -95,10 +127,10 @@ export async function adminRoutes(app: FastifyInstance) {
     return { total, items: rows.map(member) }
   })
 
-  app.get('/v0/admin/members/:bumpId', admin, async (req, reply) => {
-    const p = bumpParam.safeParse((req.params as any).bumpId)
+  app.get('/v0/admin/members/:memberId', admin, async (req, reply) => {
+    const p = memberParam.safeParse((req.params as any).memberId)
     if (!p.success) return reply.code(400).send({ error: 'invalid_input' })
-    const row = db.prepare(`SELECT u.id AS uid, ${MEMBER_COLS} FROM users u WHERE u.bump_id = ?`).get(p.data) as any
+    const row = db.prepare(`SELECT u.id AS uid, ${MEMBER_COLS} FROM users u WHERE u.member_id = ?`).get(p.data) as any
     if (!row) return reply.code(404).send({ error: 'not_found' })
     const verifications = db.prepare(
       'SELECT id, status, reason, created_at, reviewed_at FROM verifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
@@ -125,15 +157,15 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   })
 
-  app.post('/v0/admin/members/:bumpId/credits', admin, async (req, reply) => {
-    const p = bumpParam.safeParse((req.params as any).bumpId)
+  app.post('/v0/admin/members/:memberId/credits', admin, async (req, reply) => {
+    const p = memberParam.safeParse((req.params as any).memberId)
     const body = z.object({
       delta: z.number().int().refine((n) => n !== 0 && Math.abs(n) <= 1000),
       reason: z.string().trim().min(1).max(200),
     }).safeParse(req.body)
     if (!p.success || !body.success) return reply.code(400).send({ error: 'invalid_input' })
     const out = tx(() => {
-      const u = db.prepare('SELECT id, request_credits FROM users WHERE bump_id = ?').get(p.data) as { id: string; request_credits: number } | undefined
+      const u = db.prepare('SELECT id, request_credits FROM users WHERE member_id = ?').get(p.data) as { id: string; request_credits: number } | undefined
       if (!u) return { error: 'not_found' as const }
       const next = u.request_credits + body.data.delta
       if (next < 0) return { error: 'would_go_negative' as const }
@@ -145,18 +177,22 @@ export async function adminRoutes(app: FastifyInstance) {
     return { requestCredits: out.credits }
   })
 
-  app.get('/v0/admin/settings', admin, async () => getSettings())
+  app.get('/v0/admin/settings', admin, async () => withCamel(getSettings()))
 
   app.put('/v0/admin/settings', admin, async (req, reply) => {
-    const body = settingsSchema.safeParse(req.body)
+    const body = settingsSchema.safeParse(normalizeSettingsBody(req.body))
     if (!body.success) return reply.code(400).send({ error: 'invalid_input' })
     const d = body.data
     tx(() => {
       writeSetting('packs', [...d.packs].sort((a, b) => a.id.localeCompare(b.id)).map((x) => ({ id: x.id, requests: x.requests, amountPaise: x.amountPaise })))
       writeSetting('payee', d.payee)
       writeSetting('quickReasons', d.quickReasons)
-      audit(req.user.sub, 'settings.update', null, { packs: d.packs, payeeChanged: true })
+      const beta: Record<string, unknown> = {}
+      for (const k of ['invite_only', 'beta_free', 'beta_free_requests', 'cap_women', 'cap_men', 'beta_city', 'pay_cap_men', 'pay_cap_rupees', 'support_email', 'support_whatsapp'] as const) {
+        if (d[k] !== undefined) { writeSetting(k, d[k]); beta[k] = d[k] }
+      }
+      audit(req.user.sub, 'settings.update', null, { packs: d.packs, payeeChanged: true, ...beta })
     })
-    return getSettings()
+    return withCamel(getSettings())
   })
 }

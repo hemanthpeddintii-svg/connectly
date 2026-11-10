@@ -23,7 +23,7 @@ async function call(method: string, url: string, opts: { token?: string; json?: 
   return fetch(BASE + url, { method, headers, body })
 }
 
-type Session = { token: string; user: { bumpId: string } }
+type Session = { token: string; user: { memberId: string } }
 
 async function signup(email: string, name: string, age = 30, interests: string[] = [], gender: 'man' | 'woman' = 'man') {
   const r = await call('POST', '/signup', { json: { agreeToTerms: true, email, password: 'Tr0ub4dor&3xKq', name, age, interests, gender } })
@@ -40,7 +40,7 @@ async function activeUser(email: string, name: string, age = 30, interests: stri
   const admin = await signup('admin@x.test', 'Admin').catch(async () =>
     (await (await call('POST', '/login', { json: { email: 'admin@x.test', password: 'Tr0ub4dor&3xKq' } })).json()) as Session)
   const list = (await (await call('GET', '/admin/verifications', { token: admin.token })).json()) as any[]
-  const item = list.find((x) => x.user.bumpId === u.user.bumpId)
+  const item = list.find((x) => x.user.memberId === u.user.memberId)
   assert.equal((await call('POST', `/admin/verifications/${item.id}/decision`, { token: admin.token, json: { decision: 'approve' } })).status, 200)
   return u
 }
@@ -86,20 +86,20 @@ describe('preferences API', () => {
 
   it('returns empty defaults, stores valid input and clears it', async () => {
     const u = await activeUser('p1@x.test', 'P1')
-    const empty = { minAge: null, maxAge: null, interests: [] }
+    const empty = { minAge: null, maxAge: null, interests: [], city: '', languages: [] }
     assert.deepEqual(await (await call('GET', '/preferences', { token: u.token })).json(), empty)
 
     let r = await put(u.token, { minAge: 25, maxAge: 40, interests: ['  Hiking ', 'hiking', 'Jazz'] })
     assert.equal(r.status, 200)
-    const saved = { minAge: 25, maxAge: 40, interests: ['Hiking', 'Jazz'] }
+    const saved = { minAge: 25, maxAge: 40, interests: ['Hiking', 'Jazz'], city: '', languages: [] }
     assert.deepEqual(await r.json(), saved)
     assert.deepEqual(await (await call('GET', '/preferences', { token: u.token })).json(), saved)
 
     // PUT replaces: omitted fields are unset
     r = await put(u.token, { minAge: 30 })
-    assert.deepEqual(await r.json(), { minAge: 30, maxAge: null, interests: [] })
-    r = await put(u.token, { minAge: null, maxAge: 120, interests: [] })
-    assert.deepEqual(await r.json(), { minAge: null, maxAge: 120, interests: [] })
+    assert.deepEqual(await r.json(), { ...empty, minAge: 30 })
+    r = await put(u.token, { ...empty, maxAge: 120 })
+    assert.deepEqual(await r.json(), { ...empty, maxAge: 120 })
 
     // empty body (no content type) and {} both clear everything
     await put(u.token, saved)
@@ -117,7 +117,7 @@ describe('preferences API', () => {
 
   it('rejects invalid input and keeps the previous value', async () => {
     const u = await activeUser('p2@x.test', 'P2')
-    const good = { minAge: 20, maxAge: 30, interests: ['a'] }
+    const good = { minAge: 20, maxAge: 30, interests: ['a'], city: '', languages: [] as string[] }
     await put(u.token, good)
     const bad: unknown[] = [
       { minAge: 17 }, { minAge: 121 }, { maxAge: 17 }, { maxAge: 121 },
@@ -205,7 +205,7 @@ describe('wall filtering', () => {
     const d = new DatabaseSync(path.join(dir, 't.db'))
     d.prepare('UPDATE users SET request_credits = 3 WHERE email = ?').run('c-a@x.test')
     d.close()
-    const sent = await call('POST', '/requests', { token: a.token, json: { bumpId: b.user.bumpId, note: 'hello' } })
+    const sent = await call('POST', '/requests', { token: a.token, json: { memberId: b.user.memberId, note: 'hello' } })
     assert.equal(sent.status, 201)
     const m = (await (await call('POST', `/requests/${((await sent.json()) as any).id}/decision`, { token: b.token, json: { decision: 'accept' } })).json()) as any
     assert.equal(m.status, 'accepted')
@@ -219,7 +219,7 @@ describe('wall filtering', () => {
     const a = await activeUser('x-a@x.test', 'Xa')
     const b = await activeUser('x-b@x.test', 'Xb')
     await put(a.token, { minAge: 33, maxAge: 44, interests: ['secret-interest-filter'] })
-    assert.deepEqual(await (await call('GET', '/preferences', { token: b.token })).json(), { minAge: null, maxAge: null, interests: [] })
+    assert.deepEqual(await (await call('GET', '/preferences', { token: b.token })).json(), { minAge: null, maxAge: null, interests: [], city: '', languages: [] })
     const wall = JSON.stringify(await (await call('GET', '/profiles', { token: b.token })).json())
     assert.ok(!wall.includes('secret-interest-filter'))
     const me = JSON.stringify(await (await call('GET', '/me', { token: b.token })).json())

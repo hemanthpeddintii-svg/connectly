@@ -48,7 +48,7 @@ async function active(gender: 'man' | 'woman') {
   assert.equal((await call('POST', '/verification', { token: m.token, form: f })).status, 201)
   const admin = await adminToken()
   const list = (await j(await call('GET', '/admin/verifications', { token: admin }))) as any[]
-  const item = list.find((x) => x.user.bumpId === m.user.bumpId)
+  const item = list.find((x) => x.user.memberId === m.user.memberId)
   assert.equal((await call('POST', `/admin/verifications/${item.id}/decision`, { token: admin, json: { decision: 'approve' } })).status, 200)
   return m
 }
@@ -106,7 +106,7 @@ describe('terms and profile fields', () => {
     await call('PATCH', '/me', { token: w.token, json: { city: 'Delhi' } })
     const man = await active('man')
     const wall = (await j(await call('GET', '/profiles', { token: man.token }))) as any[]
-    const p = wall.find((x) => x.bumpId === w.user.bumpId)
+    const p = wall.find((x) => x.memberId === w.user.memberId)
     assert.equal(p.city, 'Delhi')
     assert.equal(p.email, undefined)
     assert.equal(p.termsAgreed, undefined)
@@ -128,7 +128,7 @@ describe('connections list, last message and unread', () => {
     const man = await active('man')
     const woman = await active('woman')
     sql('UPDATE users SET request_credits = 5 WHERE email = ?', man.email)
-    const rq = await j(await call('POST', '/requests', { token: man.token, json: { bumpId: woman.user.bumpId, note: 'Hello there' } }))
+    const rq = await j(await call('POST', '/requests', { token: man.token, json: { memberId: woman.user.memberId, note: 'Hello there' } }))
     const inbox = (await j(await call('GET', '/requests/received?status=pending', { token: woman.token }))) as any[]
     const item = inbox.find((x) => x.id === rq.id) ?? inbox[0]
     const d = await call('POST', `/requests/${item.id}/decision`, { token: woman.token, json: { decision: 'accept' } })

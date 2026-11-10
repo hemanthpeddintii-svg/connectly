@@ -191,8 +191,8 @@ describe('delivery (in-process, injected sender)', () => {
 
   const addUser = (name: string) => {
     const id = dbmod.newId()
-    dbmod.db.prepare('INSERT INTO users (id,bump_id,email,password_hash,name,age,created_at) VALUES (?,?,?,?,?,?,?)')
-      .run(id, dbmod.newBumpId(), `${name}@d.test`, 'x', name, 30, Date.now())
+    dbmod.db.prepare('INSERT INTO users (id,member_id,email,password_hash,name,age,created_at) VALUES (?,?,?,?,?,?,?)')
+      .run(id, dbmod.newMemberId(), `${name}@d.test`, 'x', name, 30, Date.now())
     return id
   }
   const addSub = (userId: string, endpoint: string) =>

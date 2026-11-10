@@ -28,7 +28,7 @@ async function signup(gender: 'man' | 'woman', name = 'T', email = `a${++n}-${Ma
   const r = await call('POST', '/signup', { json: { email, password: PW, name, age: 30, gender, agreeToTerms: true } })
   assert.equal(r.status, 200)
   const b = await j(r)
-  return { email, token: b.token as string, bumpId: b.user.bumpId as string }
+  return { email, token: b.token as string, memberId: b.user.memberId as string }
 }
 const form = () => {
   const f = new FormData()
@@ -59,8 +59,8 @@ describe('authorization', () => {
   it('every admin endpoint is 403 for members and 401 anonymous', async () => {
     const m = await signup('man')
     const eps: [string, string, unknown?][] = [
-      ['GET', '/admin/overview'], ['GET', '/admin/members'], ['GET', `/admin/members/${m.bumpId}`],
-      ['POST', `/admin/members/${m.bumpId}/credits`, { delta: 1, reason: 'x' }], ['GET', '/admin/settings'],
+      ['GET', '/admin/overview'], ['GET', '/admin/members'], ['GET', `/admin/members/${m.memberId}`],
+      ['POST', `/admin/members/${m.memberId}/credits`, { delta: 1, reason: 'x' }], ['GET', '/admin/settings'],
       ['PUT', '/admin/settings', {}],
     ]
     for (const [method, url, json] of eps) {
@@ -76,17 +76,17 @@ describe('members', () => {
     const b = await signup('man', 'Zeldax100Z')
     const hit = await j(await A('GET', '/admin/members?q=' + encodeURIComponent('zelda_100%')))
     assert.equal(hit.total, 1)
-    assert.equal(hit.items[0].bumpId, a.bumpId)
+    assert.equal(hit.items[0].memberId, a.memberId)
     assert.equal(hit.items[0].email, a.email)
-    assert.equal((await j(await A('GET', `/admin/members?q=${a.bumpId.toLowerCase()}`))).items[0].bumpId, a.bumpId)
-    assert.equal((await j(await A('GET', '/admin/members?q=zeldax'))).items[0].bumpId, b.bumpId)
+    assert.equal((await j(await A('GET', `/admin/members?q=${a.memberId.toLowerCase()}`))).items[0].memberId, a.memberId)
+    assert.equal((await j(await A('GET', '/admin/members?q=zeldax'))).items[0].memberId, b.memberId)
     assert.equal((await j(await A('GET', '/admin/members?role=admin'))).items.every((x: any) => x.role === 'admin'), true)
     assert.equal((await j(await A('GET', '/admin/members?gender=woman&limit=1'))).items.length, 1)
     for (const bad of ['limit=101', 'limit=0', 'offset=-1', 'status=bogus', 'gender=x']) {
       assert.equal((await A('GET', '/admin/members?' + bad)).status, 400, bad)
     }
-    const d = await j(await A('GET', `/admin/members/${b.bumpId}`))
-    assert.equal(d.member.bumpId, b.bumpId)
+    const d = await j(await A('GET', `/admin/members/${b.memberId}`))
+    assert.equal(d.member.memberId, b.memberId)
     assert.equal(d.member.suspended, false)
     assert.deepEqual(d.verifications, [])
     assert.equal((await A('GET', '/admin/members/NOPE0000')).status, 404)
@@ -95,19 +95,19 @@ describe('members', () => {
 
   it('credits: adjusts, never below zero, validated, audited', async () => {
     const m = await signup('man')
-    const r = await j(await A('POST', `/admin/members/${m.bumpId}/credits`, { delta: 5, reason: 'goodwill' }))
+    const r = await j(await A('POST', `/admin/members/${m.memberId}/credits`, { delta: 5, reason: 'goodwill' }))
     assert.equal(r.requestCredits, 5)
-    assert.equal((await j(await A('POST', `/admin/members/${m.bumpId}/credits`, { delta: -2, reason: 'fix' }))).requestCredits, 3)
-    const neg = await A('POST', `/admin/members/${m.bumpId}/credits`, { delta: -4, reason: 'too much' })
+    assert.equal((await j(await A('POST', `/admin/members/${m.memberId}/credits`, { delta: -2, reason: 'fix' }))).requestCredits, 3)
+    const neg = await A('POST', `/admin/members/${m.memberId}/credits`, { delta: -4, reason: 'too much' })
     assert.equal(neg.status, 409)
     assert.equal((await j(neg)).error, 'would_go_negative')
     for (const bad of [{ delta: 0, reason: 'x' }, { delta: 1001, reason: 'x' }, { delta: -1001, reason: 'x' }, { delta: 1.5, reason: 'x' },
       { delta: 1, reason: '' }, { delta: 1, reason: 'x'.repeat(201) }, { delta: 1 }, { delta: '5', reason: 'x' }]) {
-      assert.equal((await A('POST', `/admin/members/${m.bumpId}/credits`, bad)).status, 400, JSON.stringify(bad))
+      assert.equal((await A('POST', `/admin/members/${m.memberId}/credits`, bad)).status, 400, JSON.stringify(bad))
     }
     assert.equal((await A('POST', '/admin/members/NOPE0000/credits', { delta: 1, reason: 'x' })).status, 404)
     assert.equal((await j(await call('GET', '/me', { token: m.token }))).requestCredits, 3)
-    const d = await j(await A('GET', `/admin/members/${m.bumpId}`))
+    const d = await j(await A('GET', `/admin/members/${m.memberId}`))
     assert.equal(d.audit.length, 2)
     assert.equal(d.audit[0].action, 'credits.adjust')
     assert.equal(d.audit[0].by, 'Admin')
@@ -124,7 +124,7 @@ describe('audit trail and overview', () => {
     assert.equal(ov.verificationsPending, before.verificationsPending + 1)
     assert.equal(typeof ov.oldestWaiting.verification, 'number')
     const vs = (await j(await A('GET', '/admin/verifications'))) as any[]
-    const v = vs.find((x) => x.user.bumpId === m.bumpId)
+    const v = vs.find((x) => x.user.memberId === m.memberId)
     assert.equal((await A('POST', `/admin/verifications/${v.id}/decision`, { decision: 'approve' })).status, 200)
 
     const pf = new FormData()
@@ -133,10 +133,10 @@ describe('audit trail and overview', () => {
     pf.set('proof', new Blob([new Uint8Array(JPEG)], { type: 'image/jpeg' }), 'p.jpg')
     assert.equal((await call('POST', '/payments', { token: m.token, form: pf })).status, 201)
     const ps = (await j(await A('GET', '/admin/payments'))) as any[]
-    const p = ps.find((x) => x.user.bumpId === m.bumpId)
+    const p = ps.find((x) => x.user.memberId === m.memberId)
     assert.equal((await A('POST', `/admin/payments/${p.id}/decision`, { decision: 'approve' })).status, 200)
 
-    const d = await j(await A('GET', `/admin/members/${m.bumpId}`))
+    const d = await j(await A('GET', `/admin/members/${m.memberId}`))
     assert.deepEqual(d.audit.map((a: any) => a.action).sort(), ['payment.approve', 'verification.approve'])
     assert.equal(d.verifications[0].status, 'approved')
     assert.equal(d.payments[0].requests, 10)
@@ -144,7 +144,7 @@ describe('audit trail and overview', () => {
     ov = await j(await A('GET', '/admin/overview'))
     assert.equal(ov.recent.length <= 8, true)
     assert.equal(ov.recent[0].by, 'Admin')
-    assert.equal(ov.recent[0].member.bumpId, m.bumpId)
+    assert.equal(ov.recent[0].member.memberId, m.memberId)
   })
 })
 
@@ -178,7 +178,7 @@ describe('settings', () => {
     const m = await signup('man')
     await call('POST', '/verification', { token: m.token, form: form() })
     const vs = (await j(await A('GET', '/admin/verifications'))) as any[]
-    await A('POST', `/admin/verifications/${vs.find((x) => x.user.bumpId === m.bumpId).id}/decision`, { decision: 'approve' })
+    await A('POST', `/admin/verifications/${vs.find((x) => x.user.memberId === m.memberId).id}/decision`, { decision: 'approve' })
     const pf = new FormData()
     pf.set('planId', 'pack10')
     pf.set('reference', 'SNAP' + Math.random().toString(36).slice(2, 10).toUpperCase())

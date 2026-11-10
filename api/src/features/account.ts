@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { db } from '../db.ts'
+import { db, track } from '../db.ts'
 import { authed, getUser } from '../guards.ts'
 import { actionGuards, connectionFilters, messageGuards, wallFilters } from './hooks.ts'
 
@@ -100,6 +100,7 @@ export async function accountRoutes(app: FastifyInstance) {
   })
 
   app.post('/v0/account/deactivate', manage, async (req) => {
+    if (!stateOf(req.user.sub).deactivated) track('deactivated', req.user.sub)
     db.prepare('INSERT INTO account_state (user_id, deactivated_at) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET deactivated_at = COALESCE(deactivated_at, excluded.deactivated_at)')
       .run(req.user.sub, Date.now())
     return stateOf(req.user.sub)
@@ -118,6 +119,7 @@ export async function accountRoutes(app: FastifyInstance) {
     const body = deleteSchema.safeParse(req.body)
     if (!body.success) return reply.code(400).send({ error: 'invalid_input' })
     const now = Date.now()
+    if (stateOf(req.user.sub).deleteRequestedAt === null) track('deletion_requested', req.user.sub, { hasReason: !!body.data?.reason })
     db.prepare(`
       INSERT INTO account_state (user_id, deactivated_at, delete_requested_at, delete_reason) VALUES (?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET

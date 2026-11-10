@@ -17,6 +17,20 @@ export function sessionValid(sub: string, tv: number | undefined): boolean {
 const verifySession = async (req: FastifyRequest, reply: FastifyReply) => {
   await req.jwtVerify()
   if (!sessionValid(req.user.sub, req.user.tv)) return reply.code(401).send({ error: 'unauthorized' })
+  recordActivity(req.user.sub)
+}
+
+// One row per user per UTC day; the in-memory set keeps this to at most one write per user per day per process.
+const seenToday = new Set<string>()
+function recordActivity(userId: string) {
+  const day = new Date().toISOString().slice(0, 10)
+  const key = `${userId}|${day}`
+  if (seenToday.has(key)) return
+  if (seenToday.size > 50_000) seenToday.clear()
+  try {
+    db.prepare('INSERT OR IGNORE INTO user_activity (user_id, day) VALUES (?, ?)').run(userId, day)
+    seenToday.add(key)
+  } catch { /* activity tracking must never break a request */ }
 }
 
 // A getter, not a constant array: @fastify/rate-limit appends its hook to a route's own onRequest array, and a single

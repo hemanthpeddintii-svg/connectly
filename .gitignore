@@ -5,3 +5,10 @@ dist
 .env
 uploads
 .claude/
+
+# Private working documents (legal briefs etc.): never publish
+docs/private/
+
+# macOS and build leftovers
+.DS_Store
+*.tsbuildinfo

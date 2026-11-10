@@ -24,7 +24,7 @@ setMailer(async (m) => { sent.push(m) })
 function user(gender: 'man' | 'woman', name: string) {
   const id = randomUUID()
   const email = `${name.toLowerCase()}-${id.slice(0, 6)}@x.test`
-  db.prepare("INSERT INTO users (id, bump_id, email, password_hash, name, age, created_at) VALUES (?,?,?,?,?,?,?)")
+  db.prepare("INSERT INTO users (id, member_id, email, password_hash, name, age, created_at) VALUES (?,?,?,?,?,?,?)")
     .run(id, 'B' + id.slice(0, 8), email, 'x', name, 30, Date.now())
   return { id, email, name }
 }
