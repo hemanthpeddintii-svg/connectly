@@ -11,17 +11,19 @@ import { Loading } from '../components/State'
 import { CheckIcon } from '../components/icons'
 
 const MAX_NOTE = 300
+const MIN_NOTE = 10 // a request is a note; a bare "hi" does not tell her who is writing
 
 const sendError = (err: unknown) => {
   const code = (err as { data?: { error?: string } })?.data?.error
   if (code === 'already_requested') return "You've already sent a request to this member."
   if (code === 'not_found') return 'This member is no longer available.'
-  if (code === 'invalid_input') return `Keep your note to ${MAX_NOTE} characters or fewer.`
+  if (code === 'suspended') return "Your account is suspended, so you can't send requests right now."
+  if (code === 'invalid_input') return `Write a short note (up to ${MAX_NOTE} characters) so she knows who is writing.`
   return "Couldn't send your request. Please try again."
 }
 
 export default function SendRequest() {
-  const { bumpId = '' } = useParams()
+  const { memberId = '' } = useParams()
   const { data: me } = useMeQuery()
   const { data: wall, isLoading } = useWallQuery()
   const [send, { isLoading: sending }] = useSendRequestMutation()
@@ -32,7 +34,7 @@ export default function SendRequest() {
   const [sent, setSent] = useState<{ name: string; creditsLeft: number } | null>(null)
 
   if (!me || (isLoading && !sent)) return <Loading />
-  const p = wall?.find((m) => m.bumpId === bumpId)
+  const p = wall?.find((m) => m.memberId === memberId)
 
   if (sent) {
     return (
@@ -77,8 +79,9 @@ export default function SendRequest() {
     e.preventDefault()
     if (!p) return
     setError('')
+    if (note.trim().length < MIN_NOTE) { setError(`Write at least ${MIN_NOTE} characters, a few words about why you are writing.`); return }
     try {
-      const res = await send({ bumpId: p.bumpId, note: note.trim() || undefined }).unwrap()
+      const res = await send({ memberId: p.memberId, note: note.trim() }).unwrap()
       setSent({ name: p.name, creditsLeft: res.creditsLeft })
     } catch (err) {
       if ((err as { status?: number })?.status === 402) setNoCredits(true)

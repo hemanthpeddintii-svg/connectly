@@ -14,7 +14,7 @@ function ago(ms: number, now = Date.now()) {
   if (h < 24) return `${h}h`
   const d = Math.floor(h / 24)
   if (d < 7) return `${d}d`
-  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  return new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 }
 
 export default function Connections() {
@@ -46,9 +46,10 @@ export default function Connections() {
           </EmptyState>
         ) : (
           <>
-            <ul className="flex flex-col overflow-hidden rounded-[22px] bg-white">
+            {/* No overflow-hidden here: it would clip the Block/Report menu. The end rows round themselves instead. */}
+            <ul className="flex flex-col rounded-[22px] bg-white">
               {data.map((c) => (
-                <li key={c.id} className="flex items-center border-b border-stone-200 last:border-b-0">
+                <li key={c.id} className="flex items-center border-b border-stone-200 first:rounded-t-[22px] last:rounded-b-[22px] last:border-b-0">
                   <Link to={`/connections/${c.id}`}
                     aria-label={`Chat with ${c.profile.name}, ${c.profile.age}${c.unread ? `, ${c.unread} unread` : ''}`}
                     className="flex min-h-[76px] min-w-0 flex-1 items-center gap-3.5 px-4 py-3">
@@ -68,7 +69,7 @@ export default function Connections() {
                       </span>
                     </span>
                   </Link>
-                  <div className="px-3"><SafetyMenu bumpId={c.profile.bumpId} /></div>
+                  <div className="px-3"><SafetyMenu memberId={c.profile.memberId} /></div>
                 </li>
               ))}
             </ul>

@@ -32,7 +32,10 @@ export default function Chat() {
     try { await send({ id, body }).unwrap() }
     catch (err) {
       setText(body)
-      setSendError((err as { data?: { error?: string } })?.data?.error === 'blocked' ? "You can't message this person." : 'Message not sent. Try again.')
+      const code = (err as { data?: { error?: string } })?.data?.error
+      setSendError(code === 'blocked' ? "You can't message this person."
+        : code === 'suspended' ? "Your account is suspended, so you can't send messages right now."
+          : 'Message not sent. Try again.')
     }
   }
 
@@ -48,7 +51,7 @@ export default function Chat() {
           <h1 className="truncate font-display text-base font-semibold">{who?.name ?? 'Chat'}</h1>
           {who && <RealPerson />}
         </div>
-        {who && <SafetyMenu bumpId={who.bumpId} />}
+        {who && <SafetyMenu memberId={who.memberId} />}
       </div>
       <div role="log" aria-label="Messages" className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 py-3">
         {isLoading && <p role="status" className="text-slate">Loading…</p>}

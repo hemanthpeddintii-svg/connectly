@@ -42,7 +42,7 @@ function RequestCard({ r }: { r: ReceivedRequest }) {
             <h2 className="font-display text-lg font-semibold">{name}, {age}</h2>
             <RealPerson />
           </div>
-          <SafetyMenu bumpId={r.from.bumpId} />
+          <SafetyMenu memberId={r.from.memberId} />
         </div>
         {r.note ? <p className="whitespace-pre-wrap break-words text-[15px] leading-normal">{r.note}</p>
           : <p className="text-[15px] text-slate">{name} didn't add a note.</p>}

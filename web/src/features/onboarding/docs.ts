@@ -15,8 +15,8 @@ export const LEGAL_DOCS: LegalDoc[] = [
   {
     slug: 'privacy', title: 'Privacy policy', blurb: 'What we keep, and who sees it.',
     sections: [
-      { h: 'What we keep', p: 'Your account details, profile, messages, and the selfie and voice clip you send for verification.' },
-      { h: 'Who sees what', p: 'Members see your first name, age, city, about me, looking for and interests. Your selfie and voice clip are only ever seen by our review team and are never shown to members.' },
+      { h: 'What we keep', p: 'Your account details, profile, messages, and the selfie and voice clip you send for verification. Our team deletes the selfie and voice clip once your review is decided, whether approved or rejected.' },
+      { h: 'Who sees what', p: 'Members see your first name, age, city, about me, looking for and interests. Your selfie and voice clip are only ever seen by our review team and are never shown to members. Both files are deleted once the review is decided.' },
       { h: 'Your choices', p: 'You can deactivate or delete your account from Settings. [REPLACE WITH REVIEWED TEXT, INCLUDING RETENTION PERIODS AND CONTACT DETAILS]' },
     ],
   },

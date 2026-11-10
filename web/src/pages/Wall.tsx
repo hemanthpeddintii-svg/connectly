@@ -3,6 +3,7 @@ import { useMeQuery, useSkipMutation, useWallQuery } from '../api'
 import SafetyMenu from '../features/safety/SafetyMenu'
 import { plural } from '../format'
 import { btnPrimary, btnSecondary, card, chip, eyebrow } from '../ui'
+import PriceQuestion from '../components/PriceQuestion'
 import Monogram from '../components/Monogram'
 import RealPerson from '../components/Badge'
 import CreditsChip from '../components/CreditsChip'
@@ -27,6 +28,7 @@ export default function Wall() {
         <CreditsChip credits={credits} />
       </div>
       <h1 className="sr-only">Community</h1>
+      <PriceQuestion />
       {isError ? <ErrorState what="the community" onRetry={refetch} />
         : !p ? (
           <EmptyState title="You're all caught up">
@@ -42,12 +44,18 @@ export default function Wall() {
                   <h2 className="font-display text-[26px] font-semibold leading-tight">{p.name}, {p.age}</h2>
                   <RealPerson variant="pill" />
                 </div>
-                <SafetyMenu bumpId={p.bumpId} />
+                <SafetyMenu memberId={p.memberId} />
               </div>
               {p.bio && (
                 <section className="flex flex-col gap-1">
                   <h3 className={eyebrow}>About me</h3>
                   <p className="whitespace-pre-wrap break-words text-[15px] leading-normal">{p.bio}</p>
+                </section>
+              )}
+              {p.languages.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <h3 className={eyebrow}>Languages</h3>
+                  <ul className="flex flex-wrap gap-2">{p.languages.map((i) => <li key={i} className={chip}>{i}</li>)}</ul>
                 </section>
               )}
               {p.interests.length > 0 && (
@@ -60,8 +68,8 @@ export default function Wall() {
             </article>
             {skipFailed && <p role="alert" className="text-sm text-ember-deep">Couldn't do that. Please try again.</p>}
             <div className="flex gap-3">
-              <button type="button" disabled={skipping} onClick={() => skip({ bumpId: p.bumpId })} className={`${btnSecondary} h-[52px] flex-1`}>Not now</button>
-              <Link to={`/request/${p.bumpId}`} className={`${btnPrimary} h-[52px] flex-[1.4] text-base`}>Send request</Link>
+              <button type="button" disabled={skipping} onClick={() => skip({ memberId: p.memberId })} className={`${btnSecondary} h-[52px] flex-1`}>Not now</button>
+              <Link to={`/request/${p.memberId}`} className={`${btnPrimary} h-[52px] flex-[1.4] text-base`}>Send request</Link>
             </div>
             <p className="text-center text-[13px] text-slate">
               {credits > 0 ? `Uses 1 of your ${plural(credits, 'request')}` : "You're out of requests. You can get more next."}

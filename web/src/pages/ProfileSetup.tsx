@@ -15,6 +15,7 @@ export default function ProfileSetup() {
   const nav = useNavigate()
   const [step, setStep] = useState(1)
   const [city, setCity] = useState('')
+  const [languages, setLanguages] = useState('')
   const [bio, setBio] = useState('')
   const [lookingFor, setLookingFor] = useState('')
   const [picked, setPicked] = useState<string[]>([])
@@ -26,7 +27,7 @@ export default function ProfileSetup() {
 
   async function finish(skip: boolean) {
     setError('')
-    const body = skip ? {} : { city: city.trim(), bio: bio.trim(), lookingFor: lookingFor.trim(), interests: picked }
+    const body = skip ? {} : { city: city.trim(), languages: languages.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 8), bio: bio.trim(), lookingFor: lookingFor.trim(), interests: picked }
     try {
       if (Object.keys(body).length) await update(body).unwrap()
       nav(next, { replace: true })
@@ -34,7 +35,7 @@ export default function ProfileSetup() {
   }
 
   if (!me.termsAgreed) return <TermsGate />
-  if (me.status === 'deleted') return <Navigate to="/welcome" replace />
+  if (me.status === 'deleted') return <Navigate to="/" replace />
 
   return (
     <div className="flex flex-col gap-5 pb-6">
@@ -47,6 +48,9 @@ export default function ProfileSetup() {
           </div>
           <label className="flex flex-col gap-1.5 text-sm font-semibold">City
             <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={60} autoComplete="address-level2" className={`${field} font-normal`} /></label>
+          <label className="flex flex-col gap-1.5 text-sm font-semibold">Languages you speak
+            <input value={languages} onChange={(e) => setLanguages(e.target.value)} placeholder="English, Hindi" className={`${field} font-normal`} />
+            <span className="text-[13px] font-normal text-slate">Comma separated. Helps people who share a language find you.</span></label>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="bio" className="text-sm font-semibold">About me</label>
             <textarea id="bio" value={bio} onChange={(e) => setBio(e.target.value)} rows={5} maxLength={500} aria-describedby="bio-count" className={`${field}`} />

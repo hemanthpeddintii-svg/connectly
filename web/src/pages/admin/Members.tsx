@@ -46,9 +46,9 @@ export function MemberList() {
                 <thead><tr className="border-b border-stone-200"><th scope="col" className={th}>Member</th><th scope="col" className={th}>Status</th><th scope="col" className={th}>Role</th><th scope="col" className={th}>Gender</th><th scope="col" className={th}>Requests</th><th scope="col" className={th}>Joined</th></tr></thead>
                 <tbody>
                   {data.items.map((m) => (
-                    <tr key={m.bumpId} className="border-b border-stone-200 last:border-b-0">
+                    <tr key={m.memberId} className="border-b border-stone-200 last:border-b-0">
                       <th scope="row" className={`${td} text-left`}>
-                        <Link to={m.bumpId} className="font-semibold underline">{m.name}, {m.age}</Link>
+                        <Link to={m.memberId} className="font-semibold underline">{m.name}, {m.age}</Link>
                         <span className="block text-xs font-normal text-slate">{m.email}</span>
                       </th>
                       <td className={td}><StatusPill status={m.suspended ? 'suspended' : m.status} /></td>
@@ -71,7 +71,7 @@ export function MemberList() {
   )
 }
 
-function Adjust({ bumpId, balance }: { bumpId: string; balance: number }) {
+function Adjust({ memberId, balance }: { memberId: string; balance: number }) {
   const [adjust, { isLoading }] = useAdjustCreditsMutation()
   const [delta, setDelta] = useState('')
   const [reason, setReason] = useState('')
@@ -81,7 +81,7 @@ function Adjust({ bumpId, balance }: { bumpId: string; balance: number }) {
   async function submit(e: FormEvent) {
     e.preventDefault(); setMsg(null)
     try {
-      const r = await adjust({ bumpId, delta: n, reason: reason.trim() }).unwrap()
+      const r = await adjust({ memberId, delta: n, reason: reason.trim() }).unwrap()
       setMsg({ ok: true, text: `Balance is now ${r.requestCredits}.` }); setDelta(''); setReason('')
     } catch (err: any) {
       setMsg({ ok: false, text: err?.data?.error === 'would_go_negative' ? `That would take the balance below 0 (currently ${balance}).` : 'Could not adjust the balance.' })
@@ -103,8 +103,8 @@ function Adjust({ bumpId, balance }: { bumpId: string; balance: number }) {
 }
 
 export function MemberDetail() {
-  const { bumpId = '' } = useParams()
-  const { data, isLoading, isError, refetch } = useAdminMemberQuery(bumpId)
+  const { memberId = '' } = useParams()
+  const { data, isLoading, isError, refetch } = useAdminMemberQuery(memberId)
   const head = <PageTitle title="Member" back="/admin/members" backLabel="All members" />
   if (isLoading) return <>{head}<Loading /></>
   if (isError || !data) return <>{head}<ErrorState what="this member" onRetry={refetch} /></>
@@ -119,13 +119,13 @@ export function MemberDetail() {
             <div className="flex flex-col gap-1"><h2 className="font-display text-xl font-semibold">{m.name}, {m.age}</h2>
               <span className="flex gap-2"><StatusPill status={m.suspended ? 'suspended' : m.status} /><span className="inline-flex h-6 items-center rounded-full bg-mist px-2.5 text-xs font-semibold">{m.role}</span></span></div>
           </div>
-          <DL rows={[['Member ID', m.bumpId], ['Email', m.email], ['Gender', m.gender ?? '—'], ['City', m.city || '—'], ['Looking for', m.lookingFor || '—'], ['Joined', dateTime(m.joinedAt)],
+          <DL rows={[['Member ID', m.memberId], ['Email', m.email], ['Gender', m.gender ?? '—'], ['City', m.city || '—'], ['Looking for', m.lookingFor || '—'], ['Joined', dateTime(m.joinedAt)],
             ...(m.rejectionReason ? [['Rejection reason', m.rejectionReason] as [string, string]] : [])]} />
         </section>
         <section aria-label="Requests balance" className={`${aCard} flex flex-col gap-4`}>
           <h2 className="text-sm font-semibold text-slate">Requests balance</h2>
           <p className="font-display text-4xl font-semibold">{m.requestCredits}</p>
-          <Adjust bumpId={m.bumpId} balance={m.requestCredits} />
+          <Adjust memberId={m.memberId} balance={m.requestCredits} />
         </section>
         <section aria-label="Verification history" className={aCard}>
           <h2 className="mb-2 font-display text-lg font-semibold">Verification history</h2>

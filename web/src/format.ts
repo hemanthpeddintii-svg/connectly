@@ -1,8 +1,10 @@
 export const inr = (paise: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: paise % 100 ? 2 : 0 }).format(paise / 100)
 
-export const dateTime = (ms: number) => new Date(ms).toLocaleString()
-export const dateOnly = (ms: number) => new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+// Day first with a spelled-out month ('10 Nov 2026, 1:21 am'), so 11/10 can never be read as 10 November or 11 October.
+export const dateTime = (ms: number) =>
+  new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+export const dateOnly = (ms: number) => new Date(ms).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 

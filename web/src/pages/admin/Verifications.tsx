@@ -27,7 +27,7 @@ export function VerificationQueue() {
               <tbody>
                 {data.map((v) => (
                   <tr key={v.id} className="border-b border-stone-200 last:border-b-0">
-                    <th scope="row" className={`${td} text-left font-semibold`}>{v.user.name}, {v.user.age}<span className="block text-xs font-normal text-slate">{v.user.bumpId}</span></th>
+                    <th scope="row" className={`${td} text-left font-semibold`}>{v.user.name}, {v.user.age}<span className="block text-xs font-normal text-slate">{v.user.memberId}</span></th>
                     <td className={td}>{ago(v.createdAt)}</td>
                     <td className={td}><StatusPill status={v.status} /></td>
                     <td className={`${td} text-right`}><Link to={v.id} aria-label={`Review ${v.user.name}`} className="font-semibold underline">Review</Link></td>
@@ -37,6 +37,19 @@ export function VerificationQueue() {
             </table>
           </div>
         )}
+    </>
+  )
+}
+
+function CaseMedia({ id, name }: { id: string; name: string }) {
+  const selfie = useBlobUrl(`/admin/verifications/${id}/selfie`)
+  const voice = useBlobUrl(`/admin/verifications/${id}/voice`)
+  return (
+    <>
+      {selfie.url ? <img src={selfie.url} alt={`Selfie submitted by ${name}`} className="max-h-96 w-full rounded-xl object-contain" />
+        : <Notice tone={selfie.failed ? 'error' : 'info'}>{selfie.failed ? 'Selfie unavailable. It may have been deleted after the review.' : 'Loading selfie…'}</Notice>}
+      {voice.url ? <audio controls src={voice.url} aria-label="Voice clip" className="w-full" />
+        : <Notice tone={voice.failed ? 'error' : 'info'}>{voice.failed ? 'Voice clip unavailable. It may have been deleted after the review.' : 'Loading voice clip…'}</Notice>}
     </>
   )
 }
@@ -52,8 +65,6 @@ export function VerificationCase() {
   const [decide, { isLoading: busy }] = useDecideVerificationMutation()
   const [rejecting, setRejecting] = useState(false)
   const [error, setError] = useState('')
-  const selfie = useBlobUrl(`/admin/verifications/${id}/selfie`)
-  const voice = useBlobUrl(`/admin/verifications/${id}/voice`)
 
   async function run(arg: Parameters<typeof decide>[0]) {
     setError('')
@@ -69,17 +80,16 @@ export function VerificationCase() {
       {head}
       <div className="grid gap-5 lg:grid-cols-2">
         <section aria-label="Submitted media" className={`${aCard} flex flex-col gap-4`}>
-          {selfie.url ? <img src={selfie.url} alt={`Selfie submitted by ${v.user.name}`} className="max-h-96 w-full rounded-xl object-contain" />
-            : <Notice tone={selfie.failed ? 'error' : 'info'}>{selfie.failed ? 'Selfie unavailable.' : 'Loading selfie…'}</Notice>}
-          {voice.url ? <audio controls src={voice.url} aria-label="Voice clip" className="w-full" />
-            : <Notice tone={voice.failed ? 'error' : 'info'}>{voice.failed ? 'Voice clip unavailable.' : 'Loading voice clip…'}</Notice>}
+          {v.status !== 'pending' || v.mediaDeleted
+            ? <Notice tone="info">The selfie and voice clip were deleted after the review.</Notice>
+            : <CaseMedia id={id} name={v.user.name} />}
         </section>
         <section aria-label="Member and decision" className={`${aCard} flex flex-col gap-4`}>
           <div className="flex items-center gap-3">
             <Monogram name={v.user.name} size={44} />
             <div><h2 className="font-display text-lg font-semibold">{v.user.name}, {v.user.age}</h2><StatusPill status={v.status} /></div>
           </div>
-          <DL rows={[['Email', v.user.email], ['Member ID', <Link key="m" className="underline" to={`/admin/members/${v.user.bumpId}`}>{v.user.bumpId}</Link>], ['Submitted', dateTime(v.createdAt)]]} />
+          <DL rows={[['Email', v.user.email], ['Member ID', <Link key="m" className="underline" to={`/admin/members/${v.user.memberId}`}>{v.user.memberId}</Link>], ['Submitted', dateTime(v.createdAt)]]} />
           {v.status !== 'pending' ? (
             <p className="text-sm text-slate">{v.status === 'approved' ? 'Approved' : `Rejected: ${v.reason ?? ''}`}{v.reviewedAt ? ` · ${dateTime(v.reviewedAt)}` : ''}</p>
           ) : rejecting ? (

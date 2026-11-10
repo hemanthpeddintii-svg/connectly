@@ -13,9 +13,9 @@ export default function BlockedUsers() {
       {data && data.length > 0 && (
         <ul className="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white">
           {data.map((m) => (
-            <li key={m.bumpId} className="flex items-center justify-between gap-3 px-4 py-3">
+            <li key={m.memberId} className="flex items-center justify-between gap-3 px-4 py-3">
               <span>{m.name}, {m.age}</span>
-              <button disabled={unblocking} onClick={() => unblock(m.bumpId)} aria-label={`Unblock ${m.name}`}
+              <button disabled={unblocking} onClick={() => unblock(m.memberId)} aria-label={`Unblock ${m.name}`}
                 className="rounded-md border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-50">Unblock</button>
             </li>
           ))}

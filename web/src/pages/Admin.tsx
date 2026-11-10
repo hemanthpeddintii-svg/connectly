@@ -9,16 +9,22 @@ import { VerificationQueue, VerificationCase } from './admin/Verifications'
 import { PaymentQueue, PaymentCase } from './admin/Payments'
 import { ReportQueue, ReportCase } from './admin/Reports'
 import { MemberList, MemberDetail } from './admin/Members'
+import LaunchPage from './admin/Launch'
+import Growth from './admin/Growth'
+import Beta from './admin/Beta'
 import AdminSettingsPage from './admin/Settings'
 
 function SideNav({ onNavigate }: { onNavigate?: () => void }) {
   const { data } = useAdminOverviewQuery()
   const items: Array<{ to: string; label: string; count?: number; end?: boolean }> = [
-    { to: '/admin', label: 'Overview', end: true },
+    { to: '/admin', label: 'Launch', end: true },
+    { to: '/admin/overview', label: 'Overview' },
     { to: '/admin/verifications', label: 'Verifications', count: data?.verificationsPending },
     { to: '/admin/payments', label: 'Payments', count: data?.paymentsPending },
     { to: '/admin/reports', label: 'Reports', count: data?.reportsOpen },
     { to: '/admin/members', label: 'Members' },
+    { to: '/admin/growth', label: 'Growth' },
+    { to: '/admin/beta', label: 'Beta' },
     { to: '/admin/settings', label: 'Settings' },
   ]
   return (
@@ -66,7 +72,9 @@ export default function Admin() {
       <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">
         <div className="mx-auto max-w-5xl">
           <Routes>
-            <Route index element={<Overview />} />
+            <Route index element={<LaunchPage />} />
+            <Route path="overview" element={<Overview />} />
+            <Route path="growth" element={<Growth />} />
             <Route path="verifications" element={<VerificationQueue />} />
             <Route path="verifications/:id" element={<VerificationCase />} />
             <Route path="payments" element={<PaymentQueue />} />
@@ -74,7 +82,8 @@ export default function Admin() {
             <Route path="reports" element={<ReportQueue />} />
             <Route path="reports/:id" element={<ReportCase />} />
             <Route path="members" element={<MemberList />} />
-            <Route path="members/:bumpId" element={<MemberDetail />} />
+            <Route path="members/:memberId" element={<MemberDetail />} />
+            <Route path="beta" element={<Beta />} />
             <Route path="settings" element={<AdminSettingsPage />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>

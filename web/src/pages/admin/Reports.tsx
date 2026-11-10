@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { reasonLabel, useAdminReportsQuery, useDecideReportMutation, useLiftSuspensionMutation, type ReportStatus } from '../../features/safety/api'
+import { reasonLabel, useAdminReportsQuery, useDecideReportMutation, useLiftSuspensionMutation, useReportEvidenceQuery, type ReportStatus } from '../../features/safety/api'
 import { ago } from '../../features/admin/api'
 import { dateTime } from '../../format'
 import { EmptyState, ErrorState, Loading } from '../../components/State'
@@ -26,7 +26,7 @@ export function ReportQueue() {
                 {data.map((r) => (
                   <tr key={r.report.id} className="border-b border-stone-200 last:border-b-0">
                     <th scope="row" className={`${td} text-left font-semibold`}>{reasonLabel(r.report.reason)}</th>
-                    <td className={td}>{r.reported.name}<span className="block text-xs text-slate">{r.reported.bumpId}</span></td>
+                    <td className={td}>{r.reported.name}<span className="block text-xs text-slate">{r.reported.memberId}</span></td>
                     <td className={td}>{ago(r.report.createdAt)}</td>
                     <td className={td}><StatusPill status={r.report.status} /></td>
                     <td className={`${td} text-right`}><Link to={r.report.id} aria-label={`Review report on ${r.reported.name}`} className="font-semibold underline">Review</Link></td>
@@ -37,6 +37,52 @@ export function ReportQueue() {
           </div>
         )}
     </>
+  )
+}
+
+/** The conversation saved with a report, so the admin can judge it. Opening it is recorded in the audit log. */
+function Conversation({ reportId, reporterName, reportedName }: { reportId: string; reporterName: string; reportedName: string }) {
+  const { data, isLoading, isError, refetch } = useReportEvidenceQuery(reportId)
+  const nameOf = (who: 'reporter' | 'reported') => (who === 'reporter' ? `${reporterName} (reporter)` : `${reportedName} (reported)`)
+  const sub = 'Saved when the report was filed. Opening this is recorded in the audit log.'
+  return (
+    <section aria-label="Conversation" className={`${aCard} flex flex-col gap-3`}>
+      <div>
+        <h2 className="font-display text-lg font-semibold">Conversation saved with this report</h2>
+        <p className="text-sm text-slate">{sub}</p>
+      </div>
+      {isLoading ? <Loading /> : isError || !data ? <ErrorState what="the conversation" onRetry={refetch} />
+        : !data.available ? <p className="text-sm text-slate">No conversation was saved for this report. It was filed before this feature existed.</p>
+        : (
+          <>
+            {data.request && (
+              <div className="rounded-2xl bg-mist px-4 py-3 text-[15px]">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate">Request note · {nameOf(data.request.from)} · {dateTime(data.request.at)} · {data.request.status}</p>
+                <p className="mt-1 whitespace-pre-wrap">{data.request.note || <span className="text-slate">No note.</span>}</p>
+              </div>
+            )}
+            {data.messages.length === 0
+              ? <p className="text-sm text-slate">{data.request ? 'They had not exchanged any messages.' : 'These members had no request or chat between them.'}</p>
+              : (
+                <>
+                  {data.truncated && <p className="text-sm text-slate">Only the most recent messages are shown.</p>}
+                  <ol className="flex flex-col gap-2">
+                    {data.messages.map((m, i) => (
+                      <li key={i} className={`flex flex-col gap-0.5 ${m.from === 'reported' ? 'items-end' : 'items-start'}`}>
+                        <span className="text-xs text-slate">{nameOf(m.from)} · {dateTime(m.at)}</span>
+                        <span className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-[15px] ${m.from === 'reported' ? 'bg-ember/15' : 'bg-mist'}`}>
+                          {m.kind === 'text' ? m.body
+                            : m.kind === 'voice' ? `Voice message${m.durationMs ? ` (${Math.max(1, Math.round(m.durationMs / 1000))} s)` : ''}`
+                              : m.kind === 'image' ? 'Image' : `(${m.kind})`}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              )}
+          </>
+        )}
+    </section>
   )
 }
 
@@ -73,8 +119,8 @@ export function ReportCase() {
           <p className="whitespace-pre-wrap text-[15px]">{report.details || <span className="text-slate">No details given.</span>}</p>
           <DL rows={[
             ['Reported', dateTime(report.createdAt)],
-            ['Reporter', `${reporter.name} (${reporter.bumpId})`],
-            ['Reported member', <Link key="m" className="underline" to={`/admin/members/${reported.bumpId}`}>{reported.name}, {reported.age}</Link>],
+            ['Reporter', `${reporter.name} (${reporter.memberId})`],
+            ['Reported member', <Link key="m" className="underline" to={`/admin/members/${reported.memberId}`}>{reported.name}, {reported.age}</Link>],
             ['Email', reported.email], ['Open reports', String(reported.openReportCount)],
             ['Account', reported.suspended ? 'Suspended' : 'Active'],
           ]} />
@@ -103,12 +149,13 @@ export function ReportCase() {
           {reported.suspended && (
             <div><button disabled={lifting} className={aOutline} onClick={async () => {
               setError('')
-              try { await lift(reported.bumpId).unwrap() } catch { setError('Could not lift the suspension.') }
+              try { await lift(reported.memberId).unwrap() } catch { setError('Could not lift the suspension.') }
             }}>Lift suspension</button></div>
           )}
           {error && <Notice tone="error">{error}</Notice>}
         </section>
       </div>
+      <div className="mt-5"><Conversation reportId={report.id} reporterName={reporter.name} reportedName={reported.name} /></div>
     </>
   )
 }

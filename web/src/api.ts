@@ -1,32 +1,37 @@
 import { createApi, fetchBaseQuery, type BaseQueryFn, type FetchArgs, type FetchBaseQueryError } from '@reduxjs/toolkit/query/react'
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
 
-export type Profile = { bumpId: string; name: string; age: number; bio: string; interests: string[]; city: string; lookingFor: string }
+export type Profile = { memberId: string; name: string; age: number; bio: string; interests: string[]; city: string; languages: string[]; lookingFor: string }
 export type UserStatus = 'unverified' | 'pending' | 'active' | 'rejected' | 'deleted'
 export type Gender = 'man' | 'woman'
 export type Me = Profile & {
   email: string; status: UserStatus; role: 'user' | 'admin'; rejectionReason: string | null
-  gender: Gender | null; requestCredits: number; termsAgreed: boolean
+  gender: Gender | null; requestCredits: number; termsAgreed: boolean; priceInterest?: string | null; suspended?: boolean
 }
 export type VerificationStatus = 'pending' | 'approved' | 'rejected'
 export type AdminVerification = {
-  id: string; status: VerificationStatus; reason: string | null; createdAt: number; reviewedAt: number | null
-  user: { bumpId: string; name: string; age: number; email: string }
+  id: string; status: VerificationStatus; reason: string | null; createdAt: number; reviewedAt: number | null; mediaDeleted?: boolean
+  user: { memberId: string; name: string; age: number; email: string }
 }
 export type Plan = { id: 'pack10' | 'pack20'; name: string; amountPaise: number; requests: number }
-export type PlansResponse = { plans: Plan[]; payment: { payeeName: string | null; upiId: string | null; currency: string } }
+export type PlansResponse = { betaFree?: boolean; closed?: null | 'men' | 'revenue'; plans: Plan[]; payment: { payeeName: string | null; upiId: string | null; currency: string } }
 export type Payment = {
   id: string; planId: Plan['id']; amountPaise: number; requests: number; reference: string
   status: VerificationStatus; reason: string | null; createdAt: number; reviewedAt: number | null
+  refundedPaise?: number; refundedRequests?: number
 }
-export type AdminPayment = Payment & { user: { bumpId: string; name: string; email: string } }
+export type RefundInfo = {
+  refundedPaise: number; refundedRequests: number; remainingPaise: number; remainingRequests: number
+  balance: number; suggestedPaise: number; suggestedRequests: number
+}
+export type AdminPayment = Payment & { user: { memberId: string; name: string; email: string }; refund?: RefundInfo | null }
 export type LastMessage = { preview: string; kind: 'text' | 'voice' | 'image'; mine: boolean; createdAt: number }
 export type Connection = { id: string; createdAt: number; profile: Profile; lastMessage: LastMessage | null; unread: number }
 export type RequestStatus = 'pending' | 'accepted' | 'declined'
 export type ReceivedRequest = { id: string; status: RequestStatus; note: string; createdAt: number; from: Profile }
 export type SentRequest = {
   id: string; status: RequestStatus; note: string; createdAt: number
-  to: { bumpId: string; name: string; age: number }; connectionId: string | null
+  to: { memberId: string; name: string; age: number }; connectionId: string | null
 }
 export type RequestDecision = 'accept' | 'decline'
 export type Message = {
@@ -96,12 +101,12 @@ export const api = createApi({
     logoutAll: b.mutation<{ ok: true }, void>({
       query: () => ({ url: 'logout-all', method: 'POST' }),
     }),
-    signup: b.mutation<AuthResult, { email: string; password: string; name: string; age: number; gender: Gender; agreeToTerms: true; city?: string; lookingFor?: string; bio?: string; interests?: string[] }>({
+    signup: b.mutation<AuthResult, { email: string; password: string; name: string; age: number; gender: Gender; agreeToTerms: true; inviteCode?: string; city?: string; languages?: string[]; lookingFor?: string; bio?: string; interests?: string[] }>({
       query: (body) => ({ url: 'signup', method: 'POST', body }),
     }),
     me: b.query<Me, void>({ query: () => 'me', providesTags: ['Me'] }),
     // gender is accepted only while the account has none (legacy accounts).
-    updateMe: b.mutation<Me, Partial<Pick<Me, 'name' | 'bio' | 'interests' | 'city' | 'lookingFor'>> & { gender?: Gender }>({
+    updateMe: b.mutation<Me, Partial<Pick<Me, 'name' | 'bio' | 'interests' | 'city' | 'languages' | 'lookingFor'>> & { gender?: Gender }>({
       query: (body) => ({ url: 'me', method: 'PATCH', body }),
       invalidatesTags: ['Me'],
     }),
@@ -139,12 +144,16 @@ export const api = createApi({
       query: ({ id, ...body }) => ({ url: `admin/payments/${id}/decision`, method: 'POST', body }),
       invalidatesTags: ['AdminPayments', 'Me'],
     }),
+    refundPayment: b.mutation<{ ok: true; refundedPaise: number; refundedRequests: number; remainingPaise: number; remainingRequests: number }, { id: string; amountPaise: number; requests: number; note: string }>({
+      query: ({ id, ...body }) => ({ url: `admin/payments/${id}/refund`, method: 'POST', body }),
+      invalidatesTags: ['AdminPayments', 'Me'],
+    }),
     wall: b.query<Profile[], void>({ query: () => 'profiles', providesTags: ['Wall'] }),
-    skip: b.mutation<Record<string, never>, { bumpId: string }>({
-      query: ({ bumpId }) => ({ url: 'actions', method: 'POST', body: { bumpId, action: 'skip' } }),
+    skip: b.mutation<Record<string, never>, { memberId: string }>({
+      query: ({ memberId }) => ({ url: 'actions', method: 'POST', body: { memberId, action: 'skip' } }),
       invalidatesTags: ['Wall'],
     }),
-    sendRequest: b.mutation<{ id: string; creditsLeft: number }, { bumpId: string; note?: string }>({
+    sendRequest: b.mutation<{ id: string; creditsLeft: number }, { memberId: string; note?: string }>({
       query: (body) => ({ url: 'requests', method: 'POST', body }),
       invalidatesTags: ['Me', 'Wall', 'SentRequests'],
     }),
@@ -171,5 +180,5 @@ export const api = createApi({
 
 export const {
   useLoginMutation, useSignupMutation, useForgotPasswordMutation, useResetPasswordMutation, useChangePasswordMutation, useLogoutAllMutation, useMeQuery, useUpdateMeMutation, useWallQuery,
-  useSkipMutation, useSendRequestMutation, useReceivedRequestsQuery, useSentRequestsQuery, useDecideRequestMutation, useConnectionsQuery, useSubmitVerificationMutation, usePlansQuery, useMyPaymentsQuery, useSubmitPaymentMutation, useAdminPaymentsQuery, useDecidePaymentMutation, useAdminVerificationsQuery, useDecideVerificationMutation, useMessagesQuery, useSendMessageMutation, useAgreeTermsMutation, useMarkReadMutation,
+  useSkipMutation, useSendRequestMutation, useReceivedRequestsQuery, useSentRequestsQuery, useDecideRequestMutation, useConnectionsQuery, useSubmitVerificationMutation, usePlansQuery, useMyPaymentsQuery, useSubmitPaymentMutation, useAdminPaymentsQuery, useDecidePaymentMutation, useRefundPaymentMutation, useAdminVerificationsQuery, useDecideVerificationMutation, useMessagesQuery, useSendMessageMutation, useAgreeTermsMutation, useMarkReadMutation,
 } = api

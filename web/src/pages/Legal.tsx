@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import PageHeader from '../components/PageHeader'
 import { ChevronIcon } from '../components/icons'
+import SupportContact from '../components/SupportContact'
 import { DRAFT_NOTE, LEGAL_DOCS } from '../features/onboarding/docs'
 
 export default function Legal() {
@@ -25,6 +26,7 @@ export default function Legal() {
         <ul className="mt-2 list-disc pl-5 text-[15px]">
           <li>Requests are non-refundable once sent.</li>
           <li>We never show your selfie or voice clip to members.</li>
+          <li>Both files are deleted once our team has decided your review.</li>
         </ul>
         <p className="mt-2 text-[13px] text-slate">This is a plain summary. The full documents below are what applies.</p>
       </section>
@@ -39,7 +41,7 @@ export default function Legal() {
           </li>
         ))}
       </ul>
-      <p className="text-sm">Questions about any of this? <a className="font-semibold underline" href="mailto:[SUPPORT EMAIL]">Contact support</a></p>
+      <SupportContact />
     </div>
   )
 }

@@ -12,6 +12,7 @@ export function authErrorMessage(err: unknown, fallback = 'Something went wrong.
   if (code === 'same_password') return 'Choose a password different from your current one.'
   if (code === 'email_taken') return 'That email is already registered.'
   if (code === 'invalid_or_expired_token') return 'This reset link is invalid or has expired. Request a new one.'
+  if (code === 'invite_invalid') return 'That invite code is not valid, or it has already been used. Ask the person who invited you for a new one.'
   if (code === 'invalid_input') {
     return tooCommon
       ? 'That password is too common. Choose something harder to guess.'

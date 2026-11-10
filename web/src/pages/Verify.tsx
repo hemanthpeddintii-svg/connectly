@@ -3,7 +3,21 @@ import { Navigate } from 'react-router-dom'
 import { useMeQuery, useSubmitVerificationMutation } from '../api'
 import { btnPrimary, field as fieldCls } from '../ui'
 import { Loading } from '../components/State'
+import SupportContact from '../components/SupportContact'
 import TermsGate from '../features/onboarding/TermsGate'
+
+function HowItWorks() {
+  return (
+    <section aria-labelledby="how-v" className="rounded-3xl bg-white p-5">
+      <h2 id="how-v" className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">How verification works</h2>
+      <ol className="mt-2 list-decimal pl-5 text-[15px]">
+        <li>Send a selfie and a short voice clip.</li>
+        <li>A person on our team reviews them. Only the review team sees them, never other members.</li>
+        <li>Once the review is decided, we delete both files and you see "Verified".</li>
+      </ol>
+    </section>
+  )
+}
 
 const MAX_SELFIE = 5 * 1024 * 1024
 const MAX_VOICE = 10 * 1024 * 1024
@@ -33,7 +47,9 @@ export default function Verify() {
         <section className="rounded-3xl bg-white p-5">
           <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">What happens next</h2>
           <p className="mt-2 text-[15px] text-slate">We'll tell you the result right here. Once approved, you'll get a "Real person" badge and the community opens. If we need another try, we'll say exactly why. Nothing for you to do, and you can close the app.</p>
+          <p className="mt-2 text-[15px] text-slate">Once the review is decided, we delete your selfie and voice clip.</p>
         </section>
+        <SupportContact />
       </div>
     )
   }
@@ -73,8 +89,10 @@ export default function Verify() {
             : "Add a clear selfie and a short voice clip so we know you're real. Only our review team can see them."}
         </p>
       </div>
+      {!rejected && <HowItWorks />}
       {rejected && (
         <>
+          <p className="text-[15px] text-slate">Your earlier selfie and voice clip were deleted once the review was decided, so you will need to send new ones.</p>
           <div role="alert" className="rounded-3xl bg-white p-5">
             <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">Note from the review team</h2>
             <p className="mt-1 text-base font-semibold">{me.rejectionReason || 'No reason was given.'}</p>
@@ -97,7 +115,8 @@ export default function Verify() {
       <button disabled={isLoading} className={btnPrimary}>
         {isLoading ? 'Uploading…' : rejected ? 'Try again' : 'Submit for review'}
       </button>
-      <p className="text-center text-[13px] text-slate">Your selfie and clip are only ever seen by our review team.</p>
+      <p className="text-center text-[13px] text-slate">Only our review team sees your selfie and clip. Both files are deleted once the review is decided.</p>
+      <SupportContact className="text-center text-slate" />
     </form>
   )
 }

@@ -49,3 +49,28 @@
   .knock-pulse-late { animation: knock-pulse 480ms ease-out 240ms both; }
   .come-in { animation: come-in 240ms ease-out 240ms both; }
 }
+
+/* Landing page motion. Everything is static unless the visitor allows motion. */
+@keyframes lp-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes lp-blink { 0%, 92%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
+@keyframes lp-pop { 0%, 8% { opacity: 0; transform: scale(0.6); } 16%, 70% { opacity: 1; transform: scale(1); } 80%, 100% { opacity: 0; transform: scale(0.9); } }
+@keyframes lp-draw { from { stroke-dashoffset: 40; } to { stroke-dashoffset: 0; } }
+@keyframes lp-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@keyframes lp-slide { 0%, 20% { transform: translateX(-14px); opacity: 0; } 45%, 85% { transform: translateX(0); opacity: 1; } 100% { opacity: 0; } }
+.lp-blink { transform-box: fill-box; transform-origin: center; }
+.lp-pop, .lp-pulse, .lp-slide { transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .lp-bob { animation: lp-bob 4.5s ease-in-out infinite; }
+  .lp-bob-2 { animation-delay: -1.5s; }
+  .lp-bob-3 { animation-delay: -3s; }
+  .lp-blink { animation: lp-blink 5s infinite; }
+  .lp-pop { animation: lp-pop 6s ease-in-out infinite; }
+  .lp-pop-2 { animation-delay: 2s; }
+  .lp-pop-3 { animation-delay: 4s; }
+  .lp-reveal:not([data-in]) { opacity: 0; transform: translateY(18px); }
+  .lp-reveal { transition: opacity 600ms ease-out, transform 600ms ease-out; }
+  [data-in] .lp-draw { stroke-dasharray: 40; animation: lp-draw 1.2s ease-out both; }
+  [data-in] .lp-pulse { animation: lp-pulse 2.4s ease-in-out infinite; }
+  [data-in] .lp-slide { animation: lp-slide 4s ease-in-out infinite; }
+  html.lp-smooth { scroll-behavior: smooth; }
+}

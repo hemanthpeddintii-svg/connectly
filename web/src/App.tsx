@@ -23,6 +23,7 @@ import Settings from './pages/Settings'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import Welcome from './pages/Welcome'
+import Landing from './pages/Landing'
 import Values from './pages/Values'
 import ProfileSetup from './pages/ProfileSetup'
 import Guidelines from './pages/Guidelines'
@@ -50,7 +51,7 @@ function Shell() {
     }
   }, [error, me?.status, dispatch])
 
-  if (!token) return <Navigate to="/welcome" replace />
+  if (!token) return <Navigate to="/" replace />
   if (!me) {
     return error
       ? <p role="alert" className="p-6 text-slate">Couldn't load your account. <button className="underline" onClick={refetch}>Try again</button></p>
@@ -71,6 +72,13 @@ function Shell() {
     <div className="flex min-h-dvh flex-col">
       <TermsGate />
       {!bare &&<div className="mx-auto w-full max-w-2xl"><TopBar /></div>}
+      {me.suspended && (
+        <div role="status" className="mx-auto mt-3 w-full max-w-2xl px-5">
+          <p className="rounded-2xl bg-ember/15 px-4 py-3 text-sm font-medium text-ember-deep">
+            Your account is suspended after a report. You can read your chats, but you can't send requests or messages right now.
+          </p>
+        </div>
+      )}
       <main className={`mx-auto flex w-full max-w-2xl flex-1 flex-col ${flush.test(pathname) ? '' : 'px-5 pt-4'} ${tabs ? 'pb-24 md:pb-10' : ''}`}>
         <Outlet />
       </main>
@@ -82,6 +90,7 @@ function Shell() {
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Auth mode="login" />} />
       <Route path="/signup" element={<Auth mode="signup" />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -97,7 +106,7 @@ export default function App() {
         <Route path="/settings/notifications" element={<NotificationSettings />} />
         <Route path="/verify" element={<Verify />} />
         <Route path="/wall" element={<Wall />} />
-        <Route path="/request/:bumpId" element={<SendRequest />} />
+        <Route path="/request/:memberId" element={<SendRequest />} />
         <Route path="/requests" element={<Requests />} />
         <Route path="/accepted/:connectionId" element={<Accepted />} />
         <Route path="/sent" element={<Sent />} />

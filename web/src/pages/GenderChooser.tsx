@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useUpdateMeMutation, type Gender } from '../api'
+import { betaFullMessage, usePublicConfigQuery } from '../features/beta/api'
 import { btnPrimary } from '../ui'
 import { LogoMark } from '../components/icons'
 import JoiningAs from '../components/JoiningAs'
@@ -7,6 +8,7 @@ import JoiningAs from '../components/JoiningAs'
 /** One-time question for accounts created before gender was collected. */
 export default function GenderChooser() {
   const [update, { isLoading }] = useUpdateMeMutation()
+  const { data: cfg } = usePublicConfigQuery()
   const [error, setError] = useState('')
 
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -14,7 +16,7 @@ export default function GenderChooser() {
     setError('')
     const gender = new FormData(e.currentTarget).get('joining-as') as Gender | null
     if (!gender) return setError('Choose how you are joining.')
-    try { await update({ gender }).unwrap() } catch { setError('Could not save that. Please try again.') }
+    try { await update({ gender }).unwrap() } catch (err) { setError(betaFullMessage(err, cfg?.betaCity) ?? 'Could not save that. Please try again.') }
   }
 
   return (

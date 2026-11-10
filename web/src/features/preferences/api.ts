@@ -1,6 +1,6 @@
 import { api } from '../../api'
 
-export type Preferences = { minAge: number | null; maxAge: number | null; interests: string[] }
+export type Preferences = { minAge: number | null; maxAge: number | null; interests: string[]; city: string; languages: string[] }
 
 export const preferencesApi = api.injectEndpoints({
   endpoints: (b) => ({

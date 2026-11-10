@@ -38,7 +38,7 @@ export default function Overview() {
               <tbody>
                 {data.recent.map((r, i) => (
                   <tr key={i} className="border-b border-stone-200 last:border-b-0">
-                    <th scope="row" className={`${td} text-left font-semibold`}><Link className="underline" to={`/admin/members/${r.member.bumpId}`}>{r.member.name}</Link></th>
+                    <th scope="row" className={`${td} text-left font-semibold`}><Link className="underline" to={`/admin/members/${r.member.memberId}`}>{r.member.name}</Link></th>
                     <td className={td}>{kindLabel[r.kind]}</td><td className={`${td} capitalize`}>{r.decision}</td><td className={td}>{r.by}</td><td className={td}>{ago(r.at)}</td>
                   </tr>
                 ))}

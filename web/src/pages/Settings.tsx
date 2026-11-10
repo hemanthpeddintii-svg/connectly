@@ -34,7 +34,7 @@ export default function Settings() {
       <PageHeader title="Settings" back="/me" backLabel="Back to my profile" />
       <h2 className={head}>Your community</h2>
       <ul className="flex flex-col gap-2">
-        <Row anchor to="#wall-filters" label="Wall filters" sub="Age and interests" />
+        <Row anchor to="#wall-filters" label="Wall filters" sub="Age, city, language and interests" />
         <Row to="/settings/notifications" label="Notifications" />
         <Row anchor to="#account" label="Quiet mode" />
         <Row anchor to="#blocked" label="Blocked members" />

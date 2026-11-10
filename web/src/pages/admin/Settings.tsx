@@ -3,12 +3,13 @@ import { useAdminSettingsQuery, useSaveAdminSettingsMutation, type AdminSettings
 import { ErrorState, Loading } from '../../components/State'
 import { PageTitle, Notice, aCard, aField, aPrimary } from '../../components/admin/ui'
 
-type Form = { packs: Array<{ id: 'pack10' | 'pack20'; requests: string; rupees: string }>; payeeName: string; upiId: string; verification: string; payment: string }
+type Form = { packs: Array<{ id: 'pack10' | 'pack20'; requests: string; rupees: string }>; payeeName: string; upiId: string; verification: string; payment: string; supportEmail: string; supportWhatsapp: string }
 
 const toForm = (s: AdminSettings): Form => ({
   packs: s.packs.map((p) => ({ id: p.id, requests: String(p.requests), rupees: String(p.amountPaise / 100) })),
   payeeName: s.payee.name ?? '', upiId: s.payee.upiId ?? '',
   verification: s.quickReasons.verification.join('\n'), payment: s.quickReasons.payment.join('\n'),
+  supportEmail: s.supportEmail ?? '', supportWhatsapp: s.supportWhatsapp ?? '',
 })
 const lines = (t: string) => t.split('\n').map((x) => x.trim()).filter(Boolean)
 
@@ -32,9 +33,11 @@ export default function AdminSettingsPage() {
     const v = lines(f.verification), p = lines(f.payment)
     if (v.length > 8 || p.length > 8 || [...v, ...p].some((x) => x.length > 80)) { setMsg({ ok: false, text: 'Use at most 8 quick reasons per list, each up to 80 characters.' }); return }
     try {
-      const r = await save({ packs, payee: { name: f.payeeName.trim() || null, upiId: f.upiId.trim() || null }, quickReasons: { verification: v, payment: p } }).unwrap()
+      const r = await save({ ...data, packs, payee: { name: f.payeeName.trim() || null, upiId: f.upiId.trim() || null }, quickReasons: { verification: v, payment: p }, supportEmail: f.supportEmail.trim(), supportWhatsapp: f.supportWhatsapp.trim() }).unwrap()
       setF(toForm(r)); setMsg({ ok: true, text: 'Saved. Price changes apply to new purchases only.' })
-    } catch { setMsg({ ok: false, text: 'Could not save settings. Check the values and try again.' }) }
+    } catch (e: any) {
+      setMsg({ ok: false, text: e?.data?.error === 'invalid_input' ? 'Check the values. The support email must be a valid address, and the WhatsApp number must have 8 to 15 digits.' : 'Could not save settings. Check the values and try again.' })
+    }
   }
   const setPack = (i: number, k: 'requests' | 'rupees', v: string) => setF({ ...f, packs: f.packs.map((p, j) => (j === i ? { ...p, [k]: v } : p)) })
 
@@ -67,6 +70,13 @@ export default function AdminSettingsPage() {
           <h2 className="font-display text-lg font-semibold sm:col-span-2">Quick reasons</h2>
           <label className="flex flex-col gap-1 text-sm font-semibold">Verification (one per line)<textarea rows={5} value={f.verification} onChange={(e) => setF({ ...f, verification: e.target.value })} className={`${aField} font-normal`} /></label>
           <label className="flex flex-col gap-1 text-sm font-semibold">Payment (one per line)<textarea rows={5} value={f.payment} onChange={(e) => setF({ ...f, payment: e.target.value })} className={`${aField} font-normal`} /></label>
+        </fieldset>
+        <fieldset className={`${aCard} grid gap-3 sm:grid-cols-2`}>
+          <legend className="sr-only">Support contact</legend>
+          <h2 className="font-display text-lg font-semibold sm:col-span-2">Support contact</h2>
+          <label className="flex flex-col gap-1 text-sm font-semibold">Support email<input type="email" value={f.supportEmail} onChange={(e) => setF({ ...f, supportEmail: e.target.value })} maxLength={120} className={`${aField} font-normal`} /></label>
+          <label className="flex flex-col gap-1 text-sm font-semibold">WhatsApp number<input type="tel" inputMode="tel" value={f.supportWhatsapp} onChange={(e) => setF({ ...f, supportWhatsapp: e.target.value })} maxLength={24} placeholder="+91 98765 43210" className={`${aField} font-normal`} /></label>
+          <p className="text-[13px] text-slate sm:col-span-2">Shown to members on the site. Leave empty to hide.</p>
         </fieldset>
         <div className="flex flex-wrap items-center gap-3">
           <button disabled={saving} className={aPrimary}>{saving ? 'Saving…' : 'Save'}</button>

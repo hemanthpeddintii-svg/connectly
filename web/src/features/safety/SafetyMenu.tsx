@@ -9,7 +9,7 @@ const reportError = (e: any) =>
       : e?.data?.error === 'not_found' ? 'This member is no longer available.'
         : 'Could not send the report. Please try again.'
 
-function ReportPanel({ bumpId, onClose }: { bumpId: string; onClose: () => void }) {
+function ReportPanel({ memberId, onClose }: { memberId: string; onClose: () => void }) {
   const [report, { isLoading }] = useReportMemberMutation()
   const [reason, setReason] = useState<ReportReason>('harassment')
   const [details, setDetails] = useState('')
@@ -21,7 +21,7 @@ function ReportPanel({ bumpId, onClose }: { bumpId: string; onClose: () => void 
     e.preventDefault()
     setError('')
     try {
-      await report({ bumpId, reason, details: details.trim() || undefined }).unwrap()
+      await report({ memberId, reason, details: details.trim() || undefined }).unwrap()
       setSent(true)
     } catch (err) { setError(reportError(err)) }
   }
@@ -48,6 +48,7 @@ function ReportPanel({ bumpId, onClose }: { bumpId: string; onClose: () => void 
               className="rounded-md border border-stone-300 px-2 py-2 text-sm" />
             <span className="self-end text-xs text-stone-500" aria-live="polite">{details.length}/{MAX_DETAILS}</span>
           </div>
+          <p className="text-xs text-stone-600">If you have chatted with this member, their request note and your recent messages are shared with our review team to look into your report. The member is not told who reported them.</p>
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="rounded-md border border-stone-300 px-3 py-1.5 text-sm">Cancel</button>
@@ -61,7 +62,7 @@ function ReportPanel({ bumpId, onClose }: { bumpId: string; onClose: () => void 
   )
 }
 
-export default function SafetyMenu({ bumpId }: { bumpId: string }) {
+export default function SafetyMenu({ memberId }: { memberId: string }) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<'menu' | 'block' | 'report'>('menu')
   const [block, { isLoading: blocking, isError: blockFailed }] = useBlockMemberMutation()
@@ -109,12 +110,12 @@ export default function SafetyMenu({ bumpId }: { bumpId: string }) {
               {blockFailed && <p role="alert" className="text-sm text-red-600">Could not block. Please try again.</p>}
               <div className="flex justify-end gap-2">
                 <button onClick={() => setOpen(false)} className="rounded-md border border-stone-300 px-3 py-1.5 text-sm">Cancel</button>
-                <button disabled={blocking} onClick={() => block(bumpId).unwrap().then(() => setOpen(false), () => {})}
+                <button disabled={blocking} onClick={() => block(memberId).unwrap().then(() => setOpen(false), () => {})}
                   className="rounded-md bg-red-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">{blocking ? 'Blocking…' : 'Block'}</button>
               </div>
             </div>
           )}
-          {mode === 'report' && <ReportPanel bumpId={bumpId} onClose={() => setOpen(false)} />}
+          {mode === 'report' && <ReportPanel memberId={memberId} onClose={() => setOpen(false)} />}
         </div>
       )}
     </div>
