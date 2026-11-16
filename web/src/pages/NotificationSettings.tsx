@@ -3,6 +3,8 @@ import { api } from '../api'
 import PageHeader from '../components/PageHeader'
 import { ErrorState, Loading } from '../components/State'
 import PushToggle from '../features/push/PushToggle'
+import { PageFade } from '../components/motion'
+import { card } from '../ui'
 
 const notificationsApi = api.injectEndpoints({
   endpoints: (b) => ({
@@ -31,13 +33,13 @@ export default function NotificationSettings() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <PageFade className="flex flex-col gap-5">
       <PageHeader title="Notifications" back="/settings" backLabel="Back to settings" />
       <p className="text-[15px] leading-relaxed text-slate">
         We tell you when something needs you. Notifications never show names or messages, so they are safe on a lock screen.
       </p>
-      <section aria-labelledby="email-title" className="flex flex-col gap-3 rounded-3xl bg-white p-5">
-        <h2 id="email-title" className="font-display text-lg font-semibold">Email</h2>
+      <section aria-labelledby="email-title" className={`${card} flex flex-col gap-3`}>
+        <h2 id="email-title" className="font-display text-xl">Email</h2>
         {isLoading ? <Loading /> : isError ? <ErrorState what="your notification settings" onRetry={refetch} /> : (
           <>
             <div className="flex items-center justify-between gap-3">
@@ -45,7 +47,7 @@ export default function NotificationSettings() {
               <button type="button" role="switch" aria-checked={on} aria-labelledby="email-label" aria-describedby="email-help"
                 disabled={saving} onClick={() => void toggle()}
                 className="flex min-h-11 items-center gap-2 disabled:opacity-50">
-                <span className="w-8 text-sm font-semibold">{on ? 'On' : 'Off'}</span>
+                <span className="w-8 text-sm font-medium text-slate">{on ? 'On' : 'Off'}</span>
                 <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${on ? 'bg-ink' : 'bg-stone-300'}`}>
                   <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${on ? 'translate-x-5' : ''}`} />
                 </span>
@@ -58,7 +60,7 @@ export default function NotificationSettings() {
           </>
         )}
       </section>
-      <div className="rounded-3xl bg-white p-5"><PushToggle /></div>
-    </div>
+      <div className={card}><PushToggle /></div>
+    </PageFade>
   )
 }

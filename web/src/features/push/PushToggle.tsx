@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { usePushConfigQuery, useSubscribePushMutation, useUnsubscribePushMutation, type PushSubscriptionBody } from './api'
+import { btnOutline, btnSmall } from '../../ui'
 
 const READY_TIMEOUT_MS = 5000
 
@@ -131,12 +132,12 @@ export default function PushToggle() {
 
   return (
     <section aria-labelledby="push-title" className="flex flex-col gap-3">
-      <h2 id="push-title" className="text-lg font-semibold">Push notifications</h2>
-      <p className="text-sm text-stone-500">
+      <h2 id="push-title" className="font-display text-xl">Push notifications</h2>
+      <p className="text-sm leading-relaxed text-slate">
         Get a heads-up when a message arrives while Connectly is closed. Notifications never show who wrote or what was said.
       </p>
       <div className="flex items-center justify-between gap-3">
-        <span id="push-label" className="text-sm">Notify me about new messages</span>
+        <span id="push-label" className="text-[15px]">Notify me about new messages</span>
         <button
           type="button"
           role="switch"
@@ -145,17 +146,17 @@ export default function PushToggle() {
           aria-describedby="push-status"
           disabled={!actionable || busy}
           onClick={() => void (isOn ? disable() : enable())}
-          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${isOn ? 'bg-stone-900' : 'bg-stone-300'}`}
+          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${isOn ? 'bg-ink' : 'bg-stone-300'}`}
         >
           <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${isOn ? 'translate-x-5' : ''}`} />
         </button>
       </div>
-      <p id="push-status" role="status" className="text-sm text-stone-600">{busy ? 'Working…' : status}</p>
+      <p id="push-status" role="status" className="text-sm text-slate">{busy ? 'Working…' : status}</p>
       {isError && supported && production && (
-        <button type="button" onClick={() => void refetch()} className="self-start rounded-md border border-stone-300 px-3 py-1.5 text-sm">Try again</button>
+        <button type="button" onClick={() => void refetch()} className={`${btnOutline} ${btnSmall} self-start`}>Try again</button>
       )}
-      {notice && <p role="status" className="text-sm text-stone-600">{notice}</p>}
-      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {notice && <p role="status" className="text-sm text-slate">{notice}</p>}
+      {error && <p role="alert" className="text-sm text-ember-deep">{error}</p>}
     </section>
   )
 }

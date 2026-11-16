@@ -26,7 +26,8 @@ export type RefundInfo = {
 }
 export type AdminPayment = Payment & { user: { memberId: string; name: string; email: string }; refund?: RefundInfo | null }
 export type LastMessage = { preview: string; kind: 'text' | 'voice' | 'image'; mine: boolean; createdAt: number }
-export type Connection = { id: string; createdAt: number; profile: Profile; lastMessage: LastMessage | null; unread: number }
+export type CloseKind = 'offline' | 'kind'
+export type Connection = { id: string; createdAt: number; profile: Profile; lastMessage: LastMessage | null; unread: number; closed: { at: number; byMe: boolean; kind: CloseKind } | null }
 export type RequestStatus = 'pending' | 'accepted' | 'declined'
 export type ReceivedRequest = { id: string; status: RequestStatus; note: string; createdAt: number; from: Profile }
 export type SentRequest = {
@@ -37,6 +38,8 @@ export type RequestDecision = 'accept' | 'decline'
 export type Message = {
   id: string; mine: boolean; kind: 'text' | 'image' | 'voice'; body: string
   attachmentMime: string | null; attachmentDurationMs: number | null; createdAt: number
+  editedAt?: number | null
+  replyTo?: { id: string; mine: boolean; kind: 'text' | 'image' | 'voice'; preview: string } | null
 }
 type AuthResult = { token: string; user: Me }
 
@@ -80,7 +83,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
 export const api = createApi({
   reducerPath: 'api',
   baseQuery,
-  tagTypes: ['Me', 'Wall', 'Requests', 'SentRequests', 'Connections', 'Messages', 'AdminVerifications', 'Payments', 'AdminPayments'],
+  tagTypes: ['Me', 'Wall', 'Skipped', 'Requests', 'SentRequests', 'Connections', 'Messages', 'AdminVerifications', 'Payments', 'AdminPayments'],
   endpoints: (b) => ({
     login: b.mutation<AuthResult, { email: string; password: string }>({
       query: (body) => ({ url: 'login', method: 'POST', body }),
@@ -113,6 +116,10 @@ export const api = createApi({
     agreeTerms: b.mutation<{ termsAgreed: true }, void>({
       query: () => ({ url: 'me/agree-terms', method: 'POST' }),
       invalidatesTags: ['Me'],
+    }),
+    closeChat: b.mutation<{ ok: true }, { id: string; kind: CloseKind }>({
+      query: ({ id, kind }) => ({ url: `connections/${id}/close`, method: 'POST', body: { kind } }),
+      invalidatesTags: ['Connections'],
     }),
     markRead: b.mutation<{ ok: true }, string>({
       query: (id) => ({ url: `connections/${id}/read`, method: 'POST' }),
@@ -148,14 +155,19 @@ export const api = createApi({
       query: ({ id, ...body }) => ({ url: `admin/payments/${id}/refund`, method: 'POST', body }),
       invalidatesTags: ['AdminPayments', 'Me'],
     }),
-    wall: b.query<Profile[], void>({ query: () => 'profiles', providesTags: ['Wall'] }),
+    wall: b.query<Profile[], void>({ query: () => 'profiles?limit=50', providesTags: ['Wall'] }),
     skip: b.mutation<Record<string, never>, { memberId: string }>({
       query: ({ memberId }) => ({ url: 'actions', method: 'POST', body: { memberId, action: 'skip' } }),
-      invalidatesTags: ['Wall'],
+      invalidatesTags: ['Wall', 'Skipped'],
+    }),
+    skipped: b.query<Array<Profile & { skippedAt: number }>, void>({ query: () => 'profiles/skipped', providesTags: ['Skipped'] }),
+    unskip: b.mutation<Record<string, never>, { memberId: string }>({
+      query: ({ memberId }) => ({ url: `actions/${memberId}`, method: 'DELETE' }),
+      invalidatesTags: ['Wall', 'Skipped'],
     }),
     sendRequest: b.mutation<{ id: string; creditsLeft: number }, { memberId: string; note?: string }>({
       query: (body) => ({ url: 'requests', method: 'POST', body }),
-      invalidatesTags: ['Me', 'Wall', 'SentRequests'],
+      invalidatesTags: ['Me', 'Wall', 'Skipped', 'SentRequests'],
     }),
     receivedRequests: b.query<ReceivedRequest[], void>({
       query: () => 'requests/received?status=pending',
@@ -171,8 +183,12 @@ export const api = createApi({
       query: (id) => `connections/${id}/messages`,
       providesTags: (_r, _e, id) => [{ type: 'Messages', id }],
     }),
-    sendMessage: b.mutation<Message, { id: string; body: string }>({
-      query: ({ id, body }) => ({ url: `connections/${id}/messages`, method: 'POST', body: { body } }),
+    sendMessage: b.mutation<Message, { id: string; body: string; replyToId?: string }>({
+      query: ({ id, body, replyToId }) => ({ url: `connections/${id}/messages`, method: 'POST', body: { body, ...(replyToId ? { replyToId } : {}) } }),
+      invalidatesTags: (_r, _e, a) => [{ type: 'Messages', id: a.id }],
+    }),
+    editMessage: b.mutation<Message, { id: string; messageId: string; body: string }>({
+      query: ({ id, messageId, body }) => ({ url: `connections/${id}/messages/${messageId}`, method: 'PATCH', body: { body } }),
       invalidatesTags: (_r, _e, a) => [{ type: 'Messages', id: a.id }],
     }),
   }),
@@ -180,5 +196,5 @@ export const api = createApi({
 
 export const {
   useLoginMutation, useSignupMutation, useForgotPasswordMutation, useResetPasswordMutation, useChangePasswordMutation, useLogoutAllMutation, useMeQuery, useUpdateMeMutation, useWallQuery,
-  useSkipMutation, useSendRequestMutation, useReceivedRequestsQuery, useSentRequestsQuery, useDecideRequestMutation, useConnectionsQuery, useSubmitVerificationMutation, usePlansQuery, useMyPaymentsQuery, useSubmitPaymentMutation, useAdminPaymentsQuery, useDecidePaymentMutation, useRefundPaymentMutation, useAdminVerificationsQuery, useDecideVerificationMutation, useMessagesQuery, useSendMessageMutation, useAgreeTermsMutation, useMarkReadMutation,
+  useSkipMutation, useSkippedQuery, useUnskipMutation, useSendRequestMutation, useReceivedRequestsQuery, useSentRequestsQuery, useDecideRequestMutation, useConnectionsQuery, useSubmitVerificationMutation, usePlansQuery, useMyPaymentsQuery, useSubmitPaymentMutation, useAdminPaymentsQuery, useDecidePaymentMutation, useRefundPaymentMutation, useAdminVerificationsQuery, useDecideVerificationMutation, useMessagesQuery, useSendMessageMutation, useEditMessageMutation, useAgreeTermsMutation, useMarkReadMutation, useCloseChatMutation,
 } = api

@@ -1,21 +1,46 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useMeQuery, useSubmitVerificationMutation } from '../api'
-import { btnPrimary, field as fieldCls } from '../ui'
+import { btnPrimary, card, eyebrow, field as fieldCls } from '../ui'
+import { CheckIcon } from '../components/icons'
+import { PageFade, Stagger, StaggerItem } from '../components/motion'
 import { Loading } from '../components/State'
 import SupportContact from '../components/SupportContact'
 import TermsGate from '../features/onboarding/TermsGate'
 
 function HowItWorks() {
+  const steps = [
+    'Send a selfie and a short voice clip.',
+    'A person on our team reviews them. Only the review team sees them, never other members.',
+    'Once the review is decided, we delete both files and you see "Verified".',
+  ]
   return (
-    <section aria-labelledby="how-v" className="rounded-3xl bg-white p-5">
-      <h2 id="how-v" className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">How verification works</h2>
-      <ol className="mt-2 list-decimal pl-5 text-[15px]">
-        <li>Send a selfie and a short voice clip.</li>
-        <li>A person on our team reviews them. Only the review team sees them, never other members.</li>
-        <li>Once the review is decided, we delete both files and you see "Verified".</li>
+    <section aria-labelledby="how-v" className={`${card} flex flex-col gap-4`}>
+      <h2 id="how-v" className={eyebrow}>How verification works</h2>
+      <ol className="flex flex-col gap-3 text-[15px] leading-relaxed">
+        {steps.map((t, n) => (
+          <li key={t} className="flex gap-3"><span aria-hidden="true" className="mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-full bg-mist text-xs font-medium">{n + 1}</span><span>{t}</span></li>
+        ))}
       </ol>
     </section>
+  )
+}
+
+/** One step of the submission: a numbered card that turns sage once its file is chosen. */
+function FileStep({ n, title, hint, done, name, children }: { n: number; title: string; hint: string; done: boolean; name?: string; children: ReactNode }) {
+  return (
+    <div className={`${card} flex flex-col gap-3 transition-colors duration-300 ${done ? '!border-verified/30' : ''}`}>
+      <div className="flex items-center gap-3">
+        <span aria-hidden="true" className={`flex h-8 w-8 flex-none items-center justify-center rounded-full text-sm font-medium transition-colors duration-300 ${done ? 'bg-sage text-verified' : 'bg-mist text-ink'}`}>
+          {done ? <CheckIcon size={14} /> : n}
+        </span>
+        <div className="min-w-0">
+          <p className="font-display text-xl leading-tight">{title}</p>
+          <p className="truncate text-[13px] text-slate">{done && name ? name : hint}</p>
+        </div>
+      </div>
+      {children}
+    </div>
   )
 }
 
@@ -27,30 +52,32 @@ export default function Verify() {
   const { data: me } = useMeQuery(undefined, { pollingInterval: 15000 })
   const [submit, { isLoading }] = useSubmitVerificationMutation()
   const [error, setError] = useState('')
+  const [selfieName, setSelfieName] = useState('')
+  const [voiceName, setVoiceName] = useState('')
   if (!me) return <Loading />
   if (me.status === 'active') return <Navigate to="/wall" replace />
 
   if (me.status === 'pending') {
     return (
-      <div className="flex flex-col gap-4 pb-4">
+      <PageFade className="flex flex-col gap-5 pb-4">
         <TermsGate />
-        <h1 className="font-display text-[28px] font-semibold leading-tight">The door is ajar.</h1>
-        <p role="status" className="text-[15px] text-slate">Thanks for sending your selfie and voice clip. Our team is taking a careful look before anyone else meets you.</p>
-        <section className="rounded-3xl bg-white p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">What we're checking</h2>
-          <ul className="mt-2 list-disc pl-5 text-[15px]">
+        <h1 className="font-display text-[34px] leading-[1.1]">The door is ajar.</h1>
+        <p role="status" className="text-[15px] leading-relaxed text-slate">Thanks for sending your selfie and voice clip. Our team is taking a careful look before anyone else meets you.</p>
+        <section className={`${card} flex flex-col gap-3`}>
+          <h2 className={eyebrow}>What we're checking</h2>
+          <ul className="flex list-disc flex-col gap-1.5 pl-5 text-[15px] marker:text-stone-300">
             <li>Your selfie shows a clear face, and it's really you</li>
             <li>Your voice clip is a real, live voice</li>
             <li>Your details match, and you're 18 or over</li>
           </ul>
         </section>
-        <section className="rounded-3xl bg-white p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">What happens next</h2>
-          <p className="mt-2 text-[15px] text-slate">We'll tell you the result right here. Once approved, you'll get a "Real person" badge and the community opens. If we need another try, we'll say exactly why. Nothing for you to do, and you can close the app.</p>
-          <p className="mt-2 text-[15px] text-slate">Once the review is decided, we delete your selfie and voice clip.</p>
+        <section className={`${card} flex flex-col gap-3`}>
+          <h2 className={eyebrow}>What happens next</h2>
+          <p className="text-[15px] leading-relaxed text-slate">We'll tell you the result right here. Once approved, you'll get a "Real person" badge and the community opens. If we need another try, we'll say exactly why. Nothing for you to do, and you can close the app.</p>
+          <p className="text-[15px] leading-relaxed text-slate">Once the review is decided, we delete your selfie and voice clip.</p>
         </section>
         <SupportContact />
-      </div>
+      </PageFade>
     )
   }
 
@@ -78,40 +105,57 @@ export default function Verify() {
   }
 
   const rejected = me.status === 'rejected'
-  const fileField = `${fieldCls} file:mr-3 file:rounded-full file:border-0 file:bg-mist file:px-3 file:py-1`
+  const fileField = `${fieldCls} file:mr-3 file:rounded-full file:border-0 file:bg-mist file:px-4 file:py-1.5 file:font-medium`
+  const added = (selfieName ? 1 : 0) + (voiceName ? 1 : 0)
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4 pb-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-5 pb-4">
       <TermsGate />
-      <div>
-        <h1 className="font-display text-[28px] font-semibold leading-tight">{rejected ? "We couldn't approve this one" : 'Verify your profile'}</h1>
-        <p className="mt-1 text-[15px] text-slate">
+      <PageFade>
+        <h1 className="font-display text-[34px] leading-[1.1]">{rejected ? "We couldn't approve this one" : 'Verify your profile'}</h1>
+        <p className="mt-2 text-[15px] leading-relaxed text-slate">
           {rejected ? "That's okay, it happens. Nothing is wrong with your account. Here's what our team saw, and how to fix it."
             : "Add a clear selfie and a short voice clip so we know you're real. Only our review team can see them."}
         </p>
-      </div>
+      </PageFade>
       {!rejected && <HowItWorks />}
       {rejected && (
         <>
           <p className="text-[15px] text-slate">Your earlier selfie and voice clip were deleted once the review was decided, so you will need to send new ones.</p>
-          <div role="alert" className="rounded-3xl bg-white p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">Note from the review team</h2>
-            <p className="mt-1 text-base font-semibold">{me.rejectionReason || 'No reason was given.'}</p>
+          <div role="alert" className={`${card} flex flex-col gap-1.5`}>
+            <h2 className={eyebrow}>Note from the review team</h2>
+            <p className="text-base font-medium">{me.rejectionReason || 'No reason was given.'}</p>
           </div>
-          <div className="rounded-3xl bg-white p-5 text-[15px]">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">For a better selfie</h2>
-            <ul className="mt-1 list-disc pl-5"><li>Face the light, so your face isn't in shadow</li><li>No sunglasses, hat or filters. Just you</li><li>Hold the phone steady, at eye level</li></ul>
-            <h2 className="mt-3 text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">For a better voice clip</h2>
-            <ul className="mt-1 list-disc pl-5"><li>Find a quiet spot, away from music and traffic</li><li>Say hello in your own words, a few clear sentences</li></ul>
+          <div className={`${card} text-[15px] leading-relaxed`}>
+            <h2 className={eyebrow}>For a better selfie</h2>
+            <ul className="mt-2 list-disc pl-5 marker:text-stone-300"><li>Face the light, so your face isn't in shadow</li><li>No sunglasses, hat or filters. Just you</li><li>Hold the phone steady, at eye level</li></ul>
+            <h2 className={`${eyebrow} mt-5`}>For a better voice clip</h2>
+            <ul className="mt-2 list-disc pl-5 marker:text-stone-300"><li>Find a quiet spot, away from music and traffic</li><li>Say hello in your own words, a few clear sentences</li></ul>
           </div>
         </>
       )}
-      <label className="flex flex-col gap-1.5 text-sm font-semibold">Selfie
-        <input name="selfie" type="file" accept="image/jpeg,image/png,image/webp" capture="user" required className={fileField} />
-      </label>
-      <label className="flex flex-col gap-1.5 text-sm font-semibold">Voice clip
-        <input name="voice" type="file" accept="audio/*" required className={fileField} />
-      </label>
-      {error && <p role="alert" className="text-sm text-ember-deep">{error}</p>}
+      <p role="status" className="text-[13px] text-slate">{added} of 2 added</p>
+      <div aria-hidden="true" className="-mt-3 flex gap-2">
+        {[0, 1].map((n) => <span key={n} className={`h-1 flex-1 rounded-full transition-colors duration-500 ${n < added ? 'bg-verified' : 'bg-stone-200'}`} />)}
+      </div>
+      <Stagger className="flex flex-col gap-4">
+        <StaggerItem>
+          <FileStep n={1} title="Selfie" hint="A clear photo of your face, in good light" done={!!selfieName} name={selfieName}>
+            <label className="flex flex-col gap-1.5 text-sm font-medium"><span className="sr-only">Selfie</span>
+              <input name="selfie" type="file" accept="image/jpeg,image/png,image/webp" capture="user" required className={fileField}
+                onChange={(e) => setSelfieName(e.target.files?.[0]?.name ?? '')} />
+            </label>
+          </FileStep>
+        </StaggerItem>
+        <StaggerItem>
+          <FileStep n={2} title="Voice clip" hint="A few clear sentences, in your own words" done={!!voiceName} name={voiceName}>
+            <label className="flex flex-col gap-1.5 text-sm font-medium"><span className="sr-only">Voice clip</span>
+              <input name="voice" type="file" accept="audio/*" required className={fileField}
+                onChange={(e) => setVoiceName(e.target.files?.[0]?.name ?? '')} />
+            </label>
+          </FileStep>
+        </StaggerItem>
+      </Stagger>
+      {error && <p role="alert" className="rounded-xl bg-ember/10 px-4 py-3 text-sm text-ember-deep">{error}</p>}
       <button disabled={isLoading} className={btnPrimary}>
         {isLoading ? 'Uploading…' : rejected ? 'Try again' : 'Submit for review'}
       </button>

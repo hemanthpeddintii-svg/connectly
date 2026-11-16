@@ -4,6 +4,7 @@ import { betaFullMessage, usePublicConfigQuery } from '../features/beta/api'
 import { btnPrimary } from '../ui'
 import { LogoMark } from '../components/icons'
 import JoiningAs from '../components/JoiningAs'
+import { PageFade } from '../components/motion'
 
 /** One-time question for accounts created before gender was collected. */
 export default function GenderChooser() {
@@ -20,15 +21,17 @@ export default function GenderChooser() {
   }
 
   return (
-    <form onSubmit={submit} className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-5 px-5 py-8">
+    <PageFade className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-5 py-8">
+    <form onSubmit={submit} className="flex flex-col gap-6">
       <LogoMark size={44} />
       <div>
-        <h1 className="font-display text-[28px] font-semibold leading-tight">How are you joining?</h1>
-        <p className="mt-1 text-[15px] text-slate">Connectly works a little differently for each side. You can't change this later, so choose what fits.</p>
+        <h1 className="font-display text-[34px] leading-[1.1]">How are you joining?</h1>
+        <p className="mt-2 text-[15px] leading-relaxed text-slate">Connectly works a little differently for each side. You can't change this later, so choose what fits.</p>
       </div>
       <JoiningAs />
-      {error && <p role="alert" className="text-sm text-ember-deep">{error}</p>}
+      {error && <p role="alert" className="rounded-xl bg-ember/10 px-4 py-3 text-sm text-ember-deep">{error}</p>}
       <button disabled={isLoading} className={btnPrimary}>{isLoading ? 'Saving…' : 'Continue'}</button>
     </form>
+    </PageFade>
   )
 }

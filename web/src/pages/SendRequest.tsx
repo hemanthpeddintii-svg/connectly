@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMeQuery, useSendRequestMutation, useWallQuery } from '../api'
 import { plural } from '../format'
-import { btnOutline, btnPrimary, card, field } from '../ui'
+import { btnAccent, btnOutline, btnPrimary, card, field } from '../ui'
+import { PageFade, Reveal } from '../components/motion'
 import Monogram from '../components/Monogram'
 import RealPerson from '../components/Badge'
 import OutOfRequests from '../components/OutOfRequests'
@@ -19,7 +20,7 @@ const sendError = (err: unknown) => {
   if (code === 'not_found') return 'This member is no longer available.'
   if (code === 'suspended') return "Your account is suspended, so you can't send requests right now."
   if (code === 'invalid_input') return `Write a short note (up to ${MAX_NOTE} characters) so she knows who is writing.`
-  return "Couldn't send your request. Please try again."
+  return "That didn't go through. Try again?"
 }
 
 export default function SendRequest() {
@@ -30,6 +31,14 @@ export default function SendRequest() {
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const [noCredits, setNoCredits] = useState(false)
+  // After a quiet while with almost nothing written, a gentle line says there is no hurry.
+  const [pondering, setPondering] = useState(false)
+  const tooShort = note.trim().length < MIN_NOTE
+  useEffect(() => {
+    if (!tooShort) { setPondering(false); return }
+    const t = setTimeout(() => setPondering(true), 25_000)
+    return () => clearTimeout(t)
+  }, [tooShort])
   // The member leaves the community list the moment the request lands, so keep their name for the confirmation.
   const [sent, setSent] = useState<{ name: string; creditsLeft: number } | null>(null)
 
@@ -38,19 +47,19 @@ export default function SendRequest() {
 
   if (sent) {
     return (
-      <div className="flex flex-col items-center gap-6 pt-10 text-center">
+      <PageFade className="flex flex-col items-center gap-7 pt-10 text-center">
         <div className="flex flex-col items-center gap-3">
           <svg aria-hidden="true" viewBox="0 0 256 256" width="120" height="120">
             <path fill="var(--color-ink)" d="M36,220V128A92,92 0 0 1 220,128V220H176V128A48,48 0 0 0 80,128V220Z" />
             <rect className="knock-pulse-late" x="120" y="96" width="16" height="124" rx="8" fill="var(--color-ember)" />
           </svg>
-          <h1 className="font-display text-[28px] font-semibold leading-tight">Request sent to {sent.name}</h1>
+          <h1 className="font-display text-[32px] leading-tight">Request sent to {sent.name}</h1>
           <p role="status" className="max-w-sm text-[15px] leading-relaxed text-slate">
             She'll see your note and can accept or say not now. If she accepts, a chat opens for you both.
           </p>
         </div>
-        <div className="flex w-full items-center gap-3 rounded-3xl bg-white p-4 text-left">
-          <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-mist"><CheckIcon size={20} /></span>
+        <div className="flex w-full items-center gap-3 rounded-[22px] border border-stone-200 bg-white p-4 text-left">
+          <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-sage text-verified"><CheckIcon size={20} /></span>
           <div className="flex flex-col">
             <b>{plural(sent.creditsLeft, 'request')} left</b>
             <span className="text-[13px] text-slate">Each request uses 1, whatever the answer.</span>
@@ -60,7 +69,7 @@ export default function SendRequest() {
           <Link to="/wall" className={btnPrimary}>Back to community</Link>
           <Link to="/sent" className={btnOutline}>See requests you've sent</Link>
         </div>
-      </div>
+      </PageFade>
     )
   }
 
@@ -90,17 +99,17 @@ export default function SendRequest() {
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-1 flex-col gap-5">
+    <PageFade className="flex flex-1 flex-col"><form onSubmit={submit} className="flex flex-1 flex-col gap-6">
       <PageHeader title="Send a request" back="/wall" backLabel="Back to community" />
-      <div className={`${card} flex items-center gap-3.5 !rounded-[22px] !p-4`}>
+      <Reveal y={10}><div className={`${card} flex items-center gap-3.5 !p-4`}>
         <Monogram name={p.name} size={52} />
         <div className="flex flex-col gap-1">
-          <b className="font-display text-lg font-semibold">{p.name}, {p.age}</b>
+          <b className="font-display text-xl">{p.name}, {p.age}</b>
           <RealPerson />
         </div>
-      </div>
+      </div></Reveal>
       <div className="flex flex-col gap-2">
-        <label htmlFor="note" className="text-[15px] font-semibold">Add a short note</label>
+        <label htmlFor="note" className="font-display text-lg">Add a short note</label>
         <textarea id="note" rows={5} maxLength={MAX_NOTE} value={note} onChange={(e) => setNote(e.target.value)}
           aria-describedby="note-help note-count"
           placeholder={`Say hello in your own words. What caught your eye about ${p.name}'s profile?`}
@@ -110,11 +119,12 @@ export default function SendRequest() {
           <span id="note-count" className="flex-none tabular-nums">{note.length}/{MAX_NOTE}</span>
         </div>
       </div>
+      <p role="status" aria-live="polite" className="min-h-5 text-[13px] leading-snug text-slate">{pondering && tooShort ? "Still thinking? Take your time. A few honest words are enough." : ""}</p>
       {error && <p role="alert" className="text-sm font-medium text-ember-deep">{error}</p>}
       <div className="mt-auto flex flex-col gap-2.5 pb-6">
-        <button disabled={sending} className={btnPrimary}>{sending ? 'Sending…' : 'Send request'}</button>
+        <button disabled={sending} className={btnAccent}>{sending ? 'Sending…' : 'Send request'}</button>
         <span className="text-center text-[13px] text-slate">Uses 1 of your {plural(me.requestCredits, 'request')}</span>
       </div>
-    </form>
+    </form></PageFade>
   )
 }

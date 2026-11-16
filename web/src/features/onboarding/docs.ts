@@ -1,5 +1,8 @@
 export type LegalDoc = { slug: 'terms' | 'privacy' | 'refunds'; title: string; blurb: string; sections: { h: string; p: string }[] }
 
+/** Shown as "Updated …" on each legal page. Change it together with TERMS_VERSION in the API when the text changes. */
+export const LEGAL_UPDATED = '11 November 2026'
+
 export const DRAFT_NOTE = 'DRAFT PLACEHOLDER. The owner must replace this with legal text reviewed by a qualified lawyer before launch.'
 
 export const LEGAL_DOCS: LegalDoc[] = [
@@ -9,6 +12,8 @@ export const LEGAL_DOCS: LegalDoc[] = [
       { h: 'Who can join', p: 'You must be 18 or over, use your own real details, and keep one account.' },
       { h: 'How requests work', p: 'Men send a request with a short note. Women can accept, or say not now. A "not now" is a full answer.' },
       { h: 'Behaviour', p: 'Be kind and honest. Harassment, pressure, sending money requests or sharing someone else\'s details leads to removal.' },
+      { h: 'What verified means', p: 'Verified means a person on our team looked at a selfie and listened to a voice clip. It is not a background check. We do not check documents or records, and we do not guarantee who any member is or how they will behave. You are responsible for your own decisions about who to talk to and whether to meet.' },
+      { h: 'Meeting people', p: 'Meeting someone you found here is your choice and your risk. Read the Staying safe page first. Never send money to another member. [REPLACE WITH REVIEWED TEXT, INCLUDING LIMITS ON OUR LIABILITY]' },
       { h: 'Our right to act', p: 'We may suspend or remove accounts that break these terms. [REPLACE WITH REVIEWED TEXT]' },
     ],
   },

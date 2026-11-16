@@ -1,6 +1,6 @@
 import { api } from '../../api'
 
-export type PublicConfig = { inviteOnly: boolean; betaFree: boolean; betaCity: string; supportEmail?: string; supportWhatsapp?: string }
+export type PublicConfig = { inviteOnly: boolean; betaFree: boolean; betaCity: string; supportEmail?: string; supportWhatsapp?: string; grievanceName?: string; grievanceEmail?: string }
 export type MyInvite = { code: string; friendsBrought: number }
 export type PriceAnswer = 'yes' | 'no' | 'maybe'
 

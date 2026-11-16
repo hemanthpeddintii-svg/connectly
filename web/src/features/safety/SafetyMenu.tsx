@@ -27,32 +27,32 @@ function ReportPanel({ memberId, onClose }: { memberId: string; onClose: () => v
   }
 
   return (
-    <div role="dialog" aria-label="Report this member" className="mt-2 flex w-72 max-w-full flex-col gap-3 rounded-lg border border-stone-200 bg-white p-4 shadow-lg">
+    <div role="dialog" aria-label="Report this member" className="mt-2 flex w-72 max-w-full flex-col gap-3 rounded-[22px] border border-stone-200 bg-white p-5 shadow-soft">
       {sent ? (
         <>
-          <p role="status" className="text-sm text-emerald-800">Thanks. Your report was sent to our team. The member is not told who reported them.</p>
-          <button onClick={onClose} className="self-end rounded-md border border-stone-300 px-3 py-1.5 text-sm">Close</button>
+          <p role="status" className="text-sm text-verified">Thanks. Your report was sent to our team. The member is not told who reported them.</p>
+          <button onClick={onClose} className="self-end rounded-full border border-stone-300 px-4 py-2 text-sm transition hover:border-ink">Close</button>
         </>
       ) : (
         <form onSubmit={submit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <label htmlFor={`${id}-reason`} className="text-sm font-medium">Reason</label>
             <select id={`${id}-reason`} value={reason} onChange={(e) => setReason(e.target.value as ReportReason)}
-              className="rounded-md border border-stone-300 px-2 py-2 text-sm">
+              className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ink focus:outline-none">
               {REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor={`${id}-details`} className="text-sm font-medium">Details <span className="font-normal text-stone-500">(optional)</span></label>
             <textarea id={`${id}-details`} value={details} onChange={(e) => setDetails(e.target.value)} maxLength={MAX_DETAILS} rows={3}
-              className="rounded-md border border-stone-300 px-2 py-2 text-sm" />
+              className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ink focus:outline-none" />
             <span className="self-end text-xs text-stone-500" aria-live="polite">{details.length}/{MAX_DETAILS}</span>
           </div>
           <p className="text-xs text-stone-600">If you have chatted with this member, their request note and your recent messages are shared with our review team to look into your report. The member is not told who reported them.</p>
-          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+          {error && <p role="alert" className="text-sm text-ember-deep">{error}</p>}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="rounded-md border border-stone-300 px-3 py-1.5 text-sm">Cancel</button>
-            <button disabled={isLoading} className="rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50">
+            <button type="button" onClick={onClose} className="rounded-full border border-stone-300 px-4 py-2 text-sm transition hover:border-ink">Cancel</button>
+            <button disabled={isLoading} className="rounded-full bg-ink px-4 py-2 text-sm text-paper disabled:opacity-50">
               {isLoading ? 'Sending…' : 'Send report'}
             </button>
           </div>
@@ -93,25 +93,25 @@ export default function SafetyMenu({ memberId }: { memberId: string }) {
     <div ref={root} className="relative inline-block">
       <button ref={button} type="button" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menuId : undefined}
         aria-label="More options" onClick={toggle}
-        className="rounded-md px-2 py-1 text-lg leading-none text-stone-600 hover:bg-stone-100">
+        className="rounded-full px-2.5 py-1 text-lg leading-none text-slate transition hover:bg-mist">
         <span aria-hidden="true">⋯</span>
       </button>
       {open && (
         <div id={menuId} className="absolute right-0 z-20">
           {mode === 'menu' && (
-            <div role="menu" className="mt-1 w-40 overflow-hidden rounded-lg border border-stone-200 bg-white py-1 shadow-lg">
+            <div role="menu" className="mt-1 w-40 overflow-hidden rounded-2xl border border-stone-200 bg-white py-1 shadow-soft">
               <button role="menuitem" className={item} onClick={() => setMode('block')}>Block</button>
               <button role="menuitem" className={item} onClick={() => setMode('report')}>Report</button>
             </div>
           )}
           {mode === 'block' && (
-            <div role="alertdialog" aria-label="Block this member" className="mt-1 flex w-64 flex-col gap-3 rounded-lg border border-stone-200 bg-white p-4 shadow-lg">
+            <div role="alertdialog" aria-label="Block this member" className="mt-1 flex w-64 flex-col gap-3 rounded-[22px] border border-stone-200 bg-white p-5 shadow-soft">
               <p className="text-sm">Block this member? You won't see each other any more. You can unblock them in Settings.</p>
-              {blockFailed && <p role="alert" className="text-sm text-red-600">Could not block. Please try again.</p>}
+              {blockFailed && <p role="alert" className="text-sm text-ember-deep">Could not block. Please try again.</p>}
               <div className="flex justify-end gap-2">
-                <button onClick={() => setOpen(false)} className="rounded-md border border-stone-300 px-3 py-1.5 text-sm">Cancel</button>
+                <button onClick={() => setOpen(false)} className="rounded-full border border-stone-300 px-4 py-2 text-sm transition hover:border-ink">Cancel</button>
                 <button disabled={blocking} onClick={() => block(memberId).unwrap().then(() => setOpen(false), () => {})}
-                  className="rounded-md bg-red-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">{blocking ? 'Blocking…' : 'Block'}</button>
+                  className="rounded-full bg-ember-deep px-4 py-2 text-sm text-white disabled:opacity-50">{blocking ? 'Blocking…' : 'Block'}</button>
               </div>
             </div>
           )}

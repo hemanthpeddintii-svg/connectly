@@ -2,10 +2,10 @@ import { useState, type FormEvent } from 'react'
 import {
   usePreferencesQuery, useSavePreferencesMutation, useClearPreferencesMutation, type Preferences as Prefs,
 } from './api'
+import { btnOutline, btnPrimary, card, field } from '../../ui'
 
 const MIN = 18
 const MAX = 120
-const field = 'w-full rounded-md border border-stone-300 bg-white px-3 py-2 outline-none focus:border-stone-900'
 
 const parseAge = (s: string, label: string): number | null | string => {
   const t = s.trim()
@@ -44,8 +44,8 @@ function validate(minAge: string, maxAge: string, interests: string, city: strin
 
 export default function Preferences() {
   const { data, isLoading, isError } = usePreferencesQuery()
-  if (isLoading) return <p className="text-stone-500">Loading filters…</p>
-  if (isError || !data) return <p role="alert" className="text-sm text-red-600">Could not load your filters.</p>
+  if (isLoading) return <p className="text-sm text-slate">Loading filters…</p>
+  if (isError || !data) return <p role="alert" className="text-sm text-ember-deep">Could not load your filters.</p>
   return <PreferencesForm saved={data} />
 }
 
@@ -82,42 +82,42 @@ function PreferencesForm({ saved }: { saved: Prefs }) {
   }
 
   return (
-    <form onSubmit={submit} noValidate aria-labelledby="prefs-title" className="flex flex-col gap-3">
-      <h2 id="prefs-title" className="text-lg font-semibold">Community filters</h2>
-      <p className="text-sm text-stone-500">
+    <form onSubmit={submit} noValidate aria-labelledby="prefs-title" className={`${card} flex flex-col gap-4`}>
+      <h2 id="prefs-title" className="font-display text-2xl">Community filters</h2>
+      <p className="text-sm leading-relaxed text-slate">
         Only the profiles shown in your community are filtered. Your connections and chats are not affected, and nobody else can see these settings.
       </p>
       <div className="flex gap-3">
-        <label className="flex flex-1 flex-col gap-1 text-sm">
+        <label className="flex flex-1 flex-col gap-1.5 text-sm font-medium">
           Minimum age
           <input type="number" inputMode="numeric" min={MIN} max={MAX} step={1} value={minAge} onChange={(e) => setMinAge(e.target.value)} placeholder="Any" className={field} />
         </label>
-        <label className="flex flex-1 flex-col gap-1 text-sm">
+        <label className="flex flex-1 flex-col gap-1.5 text-sm font-medium">
           Maximum age
           <input type="number" inputMode="numeric" min={MIN} max={MAX} step={1} value={maxAge} onChange={(e) => setMaxAge(e.target.value)} placeholder="Any" className={field} />
         </label>
       </div>
-      <label className="flex flex-col gap-1 text-sm">
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
         City
         <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={60} placeholder="Any city" className={field} />
-        <span className="text-xs text-stone-500">Only members in this city are shown. Leave empty for everywhere.</span>
+        <span className="text-[13px] font-normal text-slate">Only members in this city are shown. Leave empty for everywhere.</span>
       </label>
-      <label className="flex flex-col gap-1 text-sm">
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
         Languages
         <input value={languages} onChange={(e) => setLanguages(e.target.value)} placeholder="English, Hindi" className={field} />
-        <span className="text-xs text-stone-500">Comma separated. Members who speak at least one are shown. Leave empty to show everyone.</span>
+        <span className="text-[13px] font-normal text-slate">Comma separated. Members who speak at least one are shown. Leave empty to show everyone.</span>
       </label>
-      <label className="flex flex-col gap-1 text-sm">
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
         Interests
         <input value={interests} onChange={(e) => setInterests(e.target.value)} placeholder="hiking, jazz, cooking" className={field} />
-        <span className="text-xs text-stone-500">Comma separated. Profiles that share at least one are shown. Leave empty to show everyone.</span>
+        <span className="text-[13px] font-normal text-slate">Comma separated. Profiles that share at least one are shown. Leave empty to show everyone.</span>
       </label>
       {feedback && (
-        <p role={feedback.ok ? 'status' : 'alert'} className={`text-sm ${feedback.ok ? 'text-emerald-700' : 'text-red-600'}`}>{feedback.text}</p>
+        <p role={feedback.ok ? 'status' : 'alert'} className={`text-sm ${feedback.ok ? 'text-verified' : 'text-ember-deep'}`}>{feedback.text}</p>
       )}
-      <div className="flex gap-2">
-        <button disabled={busy} className="rounded-md bg-stone-900 px-4 py-2 text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
-        <button type="button" onClick={reset} disabled={busy} className="rounded-md border border-stone-300 px-4 py-2 disabled:opacity-50">
+      <div className="flex gap-3">
+        <button disabled={busy} className={btnPrimary}>{saving ? 'Saving…' : 'Save'}</button>
+        <button type="button" onClick={reset} disabled={busy} className={btnOutline}>
           {clearing ? 'Clearing…' : 'Clear filters'}
         </button>
       </div>

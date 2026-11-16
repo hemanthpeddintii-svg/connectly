@@ -6,7 +6,7 @@ import { ArchIcon } from './icons'
 export default function CreditsChip({ credits }: { credits: number }) {
   return (
     <Link to="/membership" aria-label={`${plural(credits, 'request')} left. Get more requests`}
-      className="inline-flex h-11 items-center gap-2 rounded-full bg-mist px-4 text-sm font-semibold text-ink">
+      className="inline-flex h-11 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-ink transition hover:border-ink">
       <ArchIcon size={16} />{plural(credits, 'request')}
     </Link>
   )

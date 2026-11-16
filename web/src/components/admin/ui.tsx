@@ -3,14 +3,14 @@ import { Link } from 'react-router-dom'
 import { useAdminSettingsQuery } from '../../features/admin/api'
 import { BackIcon } from '../icons'
 
-export const aBtn = 'inline-flex min-h-11 items-center justify-center rounded-full px-5 text-[15px] font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-50'
-export const aPrimary = `${aBtn} bg-ember text-ink`
-export const aDark = `${aBtn} bg-ink text-paper`
-export const aOutline = `${aBtn} border border-stone-300 bg-transparent text-ink`
-export const aDanger = `${aBtn} bg-ember-deep text-paper`
-export const aField = 'w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-[15px] text-ink placeholder:text-stone-500 focus:border-ink'
-export const aCard = 'rounded-2xl bg-white p-5'
-export const th = 'px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.06em] text-slate'
+export const aBtn = 'inline-flex min-h-11 select-none items-center justify-center rounded-full px-5 text-[15px] font-medium transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100'
+export const aPrimary = `${aBtn} bg-ink text-paper hover:bg-ink/90`
+export const aDark = `${aBtn} bg-ink text-paper hover:bg-ink/90`
+export const aOutline = `${aBtn} border border-stone-300 bg-transparent text-ink hover:border-ink`
+export const aDanger = `${aBtn} bg-ember-deep text-paper hover:brightness-95`
+export const aField = 'w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-[15px] text-ink transition placeholder:text-stone-500 hover:border-stone-500 focus:border-ink focus:outline-none focus:ring-4 focus:ring-ink/5'
+export const aCard = 'rounded-[20px] border border-stone-200 bg-white p-5'
+export const th = 'px-3 py-2.5 text-left text-xs font-medium uppercase tracking-[0.1em] text-slate'
 export const td = 'px-3 py-3 text-sm align-middle'
 
 export function PageTitle({ title, sub, back, backLabel }: { title: string; sub?: string; back?: string; backLabel?: string }) {
@@ -21,7 +21,7 @@ export function PageTitle({ title, sub, back, backLabel }: { title: string; sub?
           <BackIcon size={18} /> {backLabel}
         </Link>
       )}
-      <h1 className="font-display text-[26px] font-semibold leading-tight">{title}</h1>
+      <h1 className="font-display text-[32px] leading-tight">{title}</h1>
       {sub && <p className="text-[15px] text-slate">{sub}</p>}
     </header>
   )
@@ -29,7 +29,7 @@ export function PageTitle({ title, sub, back, backLabel }: { title: string; sub?
 
 const tones: Record<string, string> = {
   pending: 'bg-ember/15 text-ember-deep', open: 'bg-ember/15 text-ember-deep',
-  approved: 'bg-verified/15 text-verified', active: 'bg-verified/15 text-verified', actioned: 'bg-verified/15 text-verified',
+  approved: 'bg-sage text-verified', active: 'bg-sage text-verified', actioned: 'bg-sage text-verified',
   rejected: 'bg-mist text-slate', dismissed: 'bg-mist text-slate',
   suspended: 'bg-ember-deep text-paper', deleted: 'bg-mist text-slate',
 }
@@ -42,7 +42,7 @@ export function Tabs<T extends string>({ value, options, onChange, label }: { va
     <div role="group" aria-label={label} className="mb-4 flex flex-wrap gap-2">
       {options.map((o) => (
         <button key={o} type="button" aria-pressed={value === o} onClick={() => onChange(o)}
-          className={`min-h-11 rounded-full px-4 text-sm font-semibold capitalize ${value === o ? 'bg-ink text-paper' : 'border border-stone-300'}`}>{o}</button>
+          className={`min-h-11 rounded-full px-4 text-sm font-medium capitalize transition duration-200 ${value === o ? 'bg-ink text-paper' : 'border border-stone-300 hover:border-ink'}`}>{o}</button>
       ))}
     </div>
   )

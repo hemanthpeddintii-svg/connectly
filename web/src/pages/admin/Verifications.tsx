@@ -15,22 +15,22 @@ export function VerificationQueue() {
   const { data, isLoading, isError, refetch } = useAdminVerificationsQuery(tab)
   return (
     <>
-      <PageTitle title="Verifications" sub="Check each selfie and voice clip, then approve or reject." />
+      <PageTitle title="Verifications" sub="Check each selfie and voice clip, then approve or reject. Reject anyone who looks under 18 or whose age you are unsure of." />
       <Tabs label="Verification status" value={tab} options={TABS} onChange={setTab} />
       {isLoading ? <Loading /> : isError ? <ErrorState what="verifications" onRetry={refetch} />
         : !data?.length ? <EmptyState title={`Nothing ${tab}`}><p>New submissions show up here.</p></EmptyState>
         : (
-          <div className="overflow-x-auto rounded-2xl bg-white">
+          <div className="overflow-x-auto rounded-[20px] border border-stone-200 bg-white">
             <table className="w-full min-w-[480px]">
               <caption className="sr-only">Verifications, {tab}</caption>
               <thead><tr className="border-b border-stone-200"><th scope="col" className={th}>Member</th><th scope="col" className={th}>Submitted</th><th scope="col" className={th}>Status</th><th scope="col" className={th}><span className="sr-only">Open</span></th></tr></thead>
               <tbody>
                 {data.map((v) => (
-                  <tr key={v.id} className="border-b border-stone-200 last:border-b-0">
-                    <th scope="row" className={`${td} text-left font-semibold`}>{v.user.name}, {v.user.age}<span className="block text-xs font-normal text-slate">{v.user.memberId}</span></th>
+                  <tr key={v.id} className="border-b border-stone-100 transition-colors last:border-b-0 hover:bg-paper/60">
+                    <th scope="row" className={`${td} text-left font-medium`}>{v.user.name}, {v.user.age}<span className="block text-xs font-normal text-slate">{v.user.memberId}</span></th>
                     <td className={td}>{ago(v.createdAt)}</td>
                     <td className={td}><StatusPill status={v.status} /></td>
-                    <td className={`${td} text-right`}><Link to={v.id} aria-label={`Review ${v.user.name}`} className="font-semibold underline">Review</Link></td>
+                    <td className={`${td} text-right`}><Link to={v.id} aria-label={`Review ${v.user.name}`} className="font-medium underline underline-offset-4 decoration-stone-300 hover:decoration-ink">Review</Link></td>
                   </tr>
                 ))}
               </tbody>
@@ -87,7 +87,7 @@ export function VerificationCase() {
         <section aria-label="Member and decision" className={`${aCard} flex flex-col gap-4`}>
           <div className="flex items-center gap-3">
             <Monogram name={v.user.name} size={44} />
-            <div><h2 className="font-display text-lg font-semibold">{v.user.name}, {v.user.age}</h2><StatusPill status={v.status} /></div>
+            <div><h2 className="font-display text-lg">{v.user.name}, {v.user.age}</h2><StatusPill status={v.status} /></div>
           </div>
           <DL rows={[['Email', v.user.email], ['Member ID', <Link key="m" className="underline" to={`/admin/members/${v.user.memberId}`}>{v.user.memberId}</Link>], ['Submitted', dateTime(v.createdAt)]]} />
           {v.status !== 'pending' ? (

@@ -6,6 +6,7 @@ import type { RootState } from './store'
 import { useRealtime } from './realtime'
 import { TabBar, TopBar } from './components/Nav'
 import { Loading } from './components/State'
+import { PageFade } from './components/motion'
 import Auth from './pages/Auth'
 import GenderChooser from './pages/GenderChooser'
 import Wall from './pages/Wall'
@@ -29,6 +30,7 @@ import ProfileSetup from './pages/ProfileSetup'
 import Guidelines from './pages/Guidelines'
 import Help from './pages/Help'
 import Legal from './pages/Legal'
+import Safety from './pages/Safety'
 import NotificationSettings from './pages/NotificationSettings'
 import TermsGate from './features/onboarding/TermsGate'
 
@@ -74,13 +76,13 @@ function Shell() {
       {!bare &&<div className="mx-auto w-full max-w-2xl"><TopBar /></div>}
       {me.suspended && (
         <div role="status" className="mx-auto mt-3 w-full max-w-2xl px-5">
-          <p className="rounded-2xl bg-ember/15 px-4 py-3 text-sm font-medium text-ember-deep">
+          <p className="rounded-2xl border border-ember/30 bg-ember/10 px-4 py-3 text-sm font-medium text-ember-deep">
             Your account is suspended after a report. You can read your chats, but you can't send requests or messages right now.
           </p>
         </div>
       )}
       <main className={`mx-auto flex w-full max-w-2xl flex-1 flex-col ${flush.test(pathname) ? '' : 'px-5 pt-4'} ${tabs ? 'pb-24 md:pb-10' : ''}`}>
-        <Outlet />
+        <PageFade key={pathname} className="flex flex-1 flex-col"><Outlet /></PageFade>
       </main>
       {tabs && <TabBar />}
     </div>
@@ -97,6 +99,7 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/welcome" element={<Welcome />} />
       <Route path="/values" element={<Values />} />
+      <Route path="/safety" element={<Safety />} />
       <Route path="/legal" element={<Legal />} />
       <Route path="/legal/:doc" element={<Legal />} />
       <Route element={<Shell />}>

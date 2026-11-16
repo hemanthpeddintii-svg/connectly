@@ -84,23 +84,23 @@ export function PaymentQueue() {
       {isLoading ? <Loading /> : isError ? <ErrorState what="payments" onRetry={refetch} />
         : !data?.length ? <EmptyState title={`No ${tab} payments`}><p>New payment proofs show up here.</p></EmptyState>
         : (
-          <div className="overflow-x-auto rounded-2xl bg-white">
+          <div className="overflow-x-auto rounded-[20px] border border-stone-200 bg-white">
             <table className="w-full min-w-[560px]">
               <caption className="sr-only">Payments, {tab}</caption>
               <thead><tr className="border-b border-stone-200"><th scope="col" className={th}>Member</th><th scope="col" className={th}>Pack</th><th scope="col" className={th}>Amount</th><th scope="col" className={th}>Submitted</th><th scope="col" className={th}>Status</th><th scope="col" className={th}><span className="sr-only">Open</span></th></tr></thead>
               <tbody>
                 {data.map((p) => (
                   <Fragment key={p.id}>
-                  <tr className="border-b border-stone-200 last:border-b-0">
-                    <th scope="row" className={`${td} text-left font-semibold`}>{p.user.name}<span className="block text-xs font-normal text-slate">{p.user.memberId}</span></th>
+                  <tr className="border-b border-stone-100 transition-colors last:border-b-0 hover:bg-paper/60">
+                    <th scope="row" className={`${td} text-left font-medium`}>{p.user.name}<span className="block text-xs font-normal text-slate">{p.user.memberId}</span></th>
                     <td className={td}>{p.requests} requests</td>
                     <td className={td}>{inr(p.amountPaise)}</td>
                     <td className={td}>{ago(p.createdAt)}</td>
                     <td className={td}><StatusPill status={p.status} /></td>
-                    <td className={`${td} text-right`}><Link to={p.id} aria-label={`Review payment from ${p.user.name}`} className="font-semibold underline">Review</Link></td>
+                    <td className={`${td} text-right`}><Link to={p.id} aria-label={`Review payment from ${p.user.name}`} className="font-medium underline underline-offset-4 decoration-stone-300 hover:decoration-ink">Review</Link></td>
                   </tr>
                   {tab === 'approved' && p.refund && (p.refund.refundedPaise > 0 || p.refund.remainingPaise > 0) && (
-                    <tr key={`${p.id}-r`} className="border-b border-stone-200 last:border-b-0">
+                    <tr key={`${p.id}-r`} className="border-b border-stone-100 transition-colors last:border-b-0 hover:bg-paper/60">
                       <td colSpan={6} className="px-3 pb-3 text-sm">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="text-slate">{p.refund.refundedPaise > 0 ? `Refunded ${inr(p.refund.refundedPaise)}, ${p.refund.refundedRequests} requests taken back` : 'No refunds yet'}</span>
@@ -159,7 +159,7 @@ export function PaymentCase() {
         <section aria-label="Payment and decision" className={`${aCard} flex flex-col gap-4`}>
           <div className="flex items-center gap-3">
             <Monogram name={p.user.name} size={44} />
-            <div><h2 className="font-display text-lg font-semibold">{p.user.name}</h2><StatusPill status={p.status} /></div>
+            <div><h2 className="font-display text-lg">{p.user.name}</h2><StatusPill status={p.status} /></div>
           </div>
           <DL rows={[
             ['Pack', `${p.requests} requests`], ['Expected amount', inr(p.amountPaise)], ['Email', p.user.email],

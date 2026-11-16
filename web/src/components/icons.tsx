@@ -22,8 +22,8 @@ export function LogoMark({ size = 30, className, door = 'var(--color-ink)' }: Ic
 export function Wordmark({ className = '' }: { className?: string }) {
   return (
     <span className={`flex items-center gap-2.5 ${className}`}>
-      <LogoMark size={30} />
-      <span className="font-display text-xl font-semibold tracking-[0.01em]">connectly</span>
+      <LogoMark size={28} />
+      <span className="font-display text-[23px] leading-none">connectly</span>
     </span>
   )
 }
@@ -41,3 +41,5 @@ export const ArchIcon = (p: IconProps) => <Stroke {...p}><path d="M5 20V11a7 7 0
 export const ChatIcon = (p: IconProps) => <Stroke {...p}><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4 3.5V17A2.5 2.5 0 0 1 4 14.5z" /></Stroke>
 export const UserIcon = (p: IconProps) => <Stroke {...p}><circle cx="12" cy="8" r="4" /><path d="M4.5 20a7.5 7.5 0 0 1 15 0" /></Stroke>
 export const InboxIcon = (p: IconProps) => <Stroke {...p}><path d="M4 13l2.5-7.5h11L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h4.5a3.5 3.5 0 0 0 7 0H20" /></Stroke>
+export const ReplyIcon = ({ size = 16, ...p }: IconProps) => <Stroke size={size} {...p}><path d="M9 7L4 12l5 5" /><path d="M4 12h9a7 7 0 0 1 7 7" /></Stroke>
+export const EditIcon = ({ size = 16, ...p }: IconProps) => <Stroke size={size} {...p}><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></Stroke>

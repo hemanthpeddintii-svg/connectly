@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useMeQuery, useUpdateMeMutation } from '../api'
-import { btnOutline, btnPrimary, field } from '../ui'
+import { btnOutline, btnPrimary, eyebrow, field } from '../ui'
 import { CheckIcon } from '../components/icons'
+import { PageFade } from '../components/motion'
 import { Loading } from '../components/State'
 import TermsGate from '../features/onboarding/TermsGate'
 
@@ -38,26 +39,31 @@ export default function ProfileSetup() {
   if (me.status === 'deleted') return <Navigate to="/" replace />
 
   return (
-    <div className="flex flex-col gap-5 pb-6">
-      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep">Step {step} of 2</p>
+    <PageFade key={step} className="flex flex-col gap-6 pb-6">
+      <div className="flex flex-col gap-3">
+        <p className={eyebrow}>Step {step} of 2</p>
+        <div aria-hidden="true" className="flex gap-2">
+          {[1, 2].map((n) => <span key={n} className={`h-1 flex-1 rounded-full ${n <= step ? 'bg-ink' : 'bg-stone-200'}`} />)}
+        </div>
+      </div>
       {step === 1 ? (
         <>
           <div>
-            <h1 className="font-display text-[28px] font-semibold leading-tight">About you</h1>
-            <p className="mt-1 text-[15px] text-slate">Members meet through words, not photos. Say it in your own voice.</p>
+            <h1 className="font-display text-[34px] leading-[1.1]">About you</h1>
+            <p className="mt-2 text-[15px] leading-relaxed text-slate">Members meet through words, not photos. Say it in your own voice.</p>
           </div>
-          <label className="flex flex-col gap-1.5 text-sm font-semibold">City
+          <label className="flex flex-col gap-1.5 text-sm font-medium">City
             <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={60} autoComplete="address-level2" className={`${field} font-normal`} /></label>
-          <label className="flex flex-col gap-1.5 text-sm font-semibold">Languages you speak
+          <label className="flex flex-col gap-1.5 text-sm font-medium">Languages you speak
             <input value={languages} onChange={(e) => setLanguages(e.target.value)} placeholder="English, Hindi" className={`${field} font-normal`} />
             <span className="text-[13px] font-normal text-slate">Comma separated. Helps people who share a language find you.</span></label>
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="bio" className="text-sm font-semibold">About me</label>
+            <label htmlFor="bio" className="text-sm font-medium">About me</label>
             <textarea id="bio" value={bio} onChange={(e) => setBio(e.target.value)} rows={5} maxLength={500} aria-describedby="bio-count" className={`${field}`} />
             <span id="bio-count" className="self-end text-[13px] text-slate">{bio.length} / 500</span>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="looking" className="text-sm font-semibold">Looking for</label>
+            <label htmlFor="looking" className="text-sm font-medium">Looking for</label>
             <textarea id="looking" value={lookingFor} onChange={(e) => setLookingFor(e.target.value)} rows={3} maxLength={300} aria-describedby="looking-count" className={field} />
             <span id="looking-count" className="self-end text-[13px] text-slate">{lookingFor.length} / 300</span>
           </div>
@@ -67,8 +73,8 @@ export default function ProfileSetup() {
       ) : (
         <>
           <div>
-            <h1 className="font-display text-[28px] font-semibold leading-tight">Interests</h1>
-            <p className="mt-1 text-[15px] text-slate">Pick up to {MAX_INTERESTS} things you enjoy. They help the right people find you.</p>
+            <h1 className="font-display text-[34px] leading-[1.1]">Interests</h1>
+            <p className="mt-2 text-[15px] leading-relaxed text-slate">Pick up to {MAX_INTERESTS} things you enjoy. They help the right people find you.</p>
           </div>
           <ul className="flex flex-wrap gap-2">
             {SUGGESTED.map((t) => {
@@ -76,7 +82,7 @@ export default function ProfileSetup() {
               return (
                 <li key={t}>
                   <button type="button" aria-pressed={on} onClick={() => toggle(t)}
-                    className={`inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-sm font-medium ${on ? 'bg-ink text-paper' : 'bg-mist text-ink'}`}>
+                    className={`inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition duration-200 ${on ? 'bg-ink text-paper' : 'bg-mist text-ink hover:bg-stone-200'}`}>
                     {on && <CheckIcon size={12} />}{t}
                   </button>
                 </li>
@@ -87,9 +93,9 @@ export default function ProfileSetup() {
           {error && <p role="alert" className="text-sm text-ember-deep">{error}</p>}
           <button type="button" disabled={isLoading} onClick={() => void finish(false)} className={btnPrimary}>{isLoading ? 'Saving…' : 'Finish'}</button>
           <button type="button" disabled={isLoading} onClick={() => void finish(true)} className={btnOutline}>Skip for now</button>
-          <button type="button" onClick={() => setStep(1)} className="text-sm font-semibold underline">Back</button>
+          <button type="button" onClick={() => setStep(1)} className="self-center text-sm font-medium text-slate underline underline-offset-4">Back</button>
         </>
       )}
-    </div>
+    </PageFade>
   )
 }

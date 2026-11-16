@@ -9,9 +9,11 @@ import SecuritySettings from './SecuritySettings'
 import PageHeader from '../components/PageHeader'
 import { ChevronIcon } from '../components/icons'
 import TermsGate from '../features/onboarding/TermsGate'
+import { PageFade } from '../components/motion'
+import { eyebrow } from '../ui'
 
-const row = 'flex min-h-14 items-center justify-between rounded-[22px] bg-white px-5 text-[15px] font-semibold'
-const head = 'pt-2 text-xs font-semibold uppercase tracking-[0.08em] text-ember-deep'
+const row = 'flex min-h-14 items-center justify-between rounded-[22px] border border-stone-200 bg-white px-5 text-[15px] font-medium transition hover:border-stone-300'
+const head = `${eyebrow} pt-5`
 
 function Row({ to, label, sub, anchor }: { to: string; label: string; sub?: string; anchor?: boolean }) {
   const inner = <><span>{label}{sub && <span className="block text-[13px] font-normal text-slate">{sub}</span>}</span><ChevronIcon size={20} /></>
@@ -29,7 +31,7 @@ export default function Settings() {
     nav('/login', { replace: true })
   }
   return (
-    <div className="flex flex-col gap-3 pb-6">
+    <PageFade className="flex flex-col gap-3 pb-6">
       <TermsGate />
       <PageHeader title="Settings" back="/me" backLabel="Back to my profile" />
       <h2 className={head}>Your community</h2>
@@ -47,16 +49,17 @@ export default function Settings() {
       <h2 className={head}>About Connectly</h2>
       <ul className="flex flex-col gap-2">
         <Row to="/guidelines" label="Community guidelines" />
+        <Row to="/safety" label="Staying safe" />
         <Row to="/help" label="Help and support" />
         <Row to="/legal" label="Terms and privacy" />
       </ul>
-      <button type="button" onClick={logout} className="h-12 rounded-full border border-stone-300 text-base font-semibold">Log out</button>
-      <div className="mt-4 flex flex-col gap-6">
+      <button type="button" onClick={logout} className="mt-4 h-12 rounded-full border border-stone-300 text-base font-medium transition hover:border-ink">Log out</button>
+      <div className="mt-6 flex flex-col gap-10">
         <section id="wall-filters" className="scroll-mt-4"><Preferences /></section>
         <section id="blocked" className="scroll-mt-4"><BlockedUsers /></section>
         <section id="security" className="scroll-mt-4"><SecuritySettings /></section>
         <section id="account" className="scroll-mt-4"><Account /></section>
       </div>
-    </div>
+    </PageFade>
   )
 }

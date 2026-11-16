@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { motion } from 'motion/react'
 import { useMeQuery, useReceivedRequestsQuery } from '../api'
 import CreditsChip from './CreditsChip'
 import { ArchIcon, ChatIcon, InboxIcon, UserIcon, Wordmark } from './icons'
+import { ease, useStill } from './motion'
 
 type Tab = { to: string; label: string; icon: ReactNode; active: (path: string) => boolean; count?: number }
 
@@ -19,20 +21,26 @@ function useTabs(): Tab[] {
   return [{ to: '/wall', label: 'Community', icon: <ArchIcon />, active: (p) => p === '/wall' }, chats, me_]
 }
 
-/** Bottom tab bar on small screens. The active tab carries the small dark arch. */
+const slide = { type: 'spring', stiffness: 520, damping: 40 } as const
+
+/** Bottom tab bar on small screens. A small ink arch slides to whichever tab is open. */
 export function TabBar() {
   const { pathname } = useLocation()
   const tabs = useTabs()
+  const still = useStill()
   return (
-    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200 bg-paper pb-[env(safe-area-inset-bottom)] md:hidden">
+    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200 bg-paper/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
       <ul className="mx-auto flex max-w-2xl">
         {tabs.map((t) => {
           const on = t.active(pathname)
           return (
             <li key={t.to} className="flex-1">
               <Link to={t.to} aria-current={on ? 'page' : undefined}
-                className={`relative flex h-[68px] flex-col items-center justify-center gap-1 text-xs ${on ? 'font-semibold text-ink' : 'font-medium text-slate'}`}>
-                {on && <span aria-hidden="true" className="absolute top-0 h-3.5 w-8 rounded-t-2xl bg-ink" />}
+                className={`relative flex h-[66px] flex-col items-center justify-center gap-1 text-[11px] tracking-wide transition-colors duration-200 ${on ? 'font-semibold text-ink' : 'font-medium text-slate'}`}>
+                {on && (
+                  <motion.span aria-hidden="true" layoutId={still ? undefined : 'tab-arch'} transition={slide}
+                    className="absolute top-0 h-[3px] w-9 rounded-b-full bg-ink" />
+                )}
                 <span className="relative">
                   {t.icon}
                   {!!t.count && (
@@ -55,8 +63,9 @@ export function TopBar() {
   const { pathname } = useLocation()
   const { data: me } = useMeQuery()
   const tabs = useTabs()
+  const still = useStill()
   return (
-    <header className="hidden h-16 items-center justify-between gap-4 border-b border-stone-200 px-5 md:flex">
+    <header className="hidden h-20 items-center justify-between gap-4 px-5 md:flex">
       <Link to="/" aria-label="connectly home"><Wordmark /></Link>
       <nav aria-label="Main">
         <ul className="flex items-center gap-1">
@@ -65,7 +74,10 @@ export function TopBar() {
             return (
               <li key={t.to}>
                 <Link to={t.to} aria-current={on ? 'page' : undefined}
-                  className={`flex h-11 items-center gap-2 rounded-full px-4 text-sm ${on ? 'bg-ink font-semibold text-paper' : 'font-medium text-slate hover:bg-mist'}`}>
+                  className={`relative flex h-11 items-center gap-2 rounded-full px-4 text-sm transition-colors duration-200 ${on ? 'font-semibold text-ink' : 'font-medium text-slate hover:text-ink'}`}>
+                  {on && (
+                    <motion.span aria-hidden="true" layoutId={still ? undefined : 'top-pill'} transition={slide} className="absolute inset-0 -z-10 rounded-full bg-mist" />
+                  )}
                   {t.label}
                   {!!t.count && <span aria-label={`${t.count} waiting`} className="rounded-full bg-ember px-1.5 text-xs font-bold text-ink">{t.count}</span>}
                 </Link>
@@ -74,7 +86,7 @@ export function TopBar() {
           })}
           {me?.role === 'admin' && (
             <li><Link to="/admin" aria-current={pathname === '/admin' ? 'page' : undefined}
-              className="flex h-11 items-center rounded-full px-4 text-sm font-medium text-slate hover:bg-mist">Admin</Link></li>
+              className="flex h-11 items-center rounded-full px-4 text-sm font-medium text-slate transition-colors hover:text-ink">Admin</Link></li>
           )}
         </ul>
       </nav>
@@ -82,3 +94,5 @@ export function TopBar() {
     </header>
   )
 }
+
+export { ease }

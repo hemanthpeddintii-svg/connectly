@@ -14,7 +14,7 @@ export default function Monogram({ name, size = 52, tone = 'light', className = 
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex flex-none items-end justify-center font-display font-semibold leading-none ${tone === 'dark' ? 'bg-[#1B3A42] text-paper' : 'bg-mist text-ink'} ${className}`}
+      className={`inline-flex flex-none items-end justify-center font-display font-semibold leading-none ${tone === 'dark' ? 'bg-[#1B3A42] text-paper' : 'bg-sage text-ink'} ${className}`}
       style={{
         width: size,
         height: Math.round(size * 1.22),

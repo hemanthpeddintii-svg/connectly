@@ -13,7 +13,7 @@ export default function InviteCard() {
   }
   return (
     <section aria-labelledby="invite-title" className={`${card} flex flex-col gap-3`}>
-      <h2 id="invite-title" className="font-display text-lg font-semibold">Invite a friend</h2>
+      <h2 id="invite-title" className="font-display text-xl">Invite a friend</h2>
       <p className="text-[15px] text-slate">Know someone who would fit in? Share your link. Your code is <b className="select-all text-ink">{data.code}</b>.</p>
       <button type="button" onClick={copy} className={btnSecondary}>{copied ? 'Link copied' : 'Copy invite link'}</button>
       <p role="status" className="text-[13px] text-slate">{data.friendsBrought === 0 ? 'No friends have joined with your code yet.' : `${plural(data.friendsBrought, 'friend')} joined with your code.`}</p>

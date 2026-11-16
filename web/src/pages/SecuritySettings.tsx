@@ -2,8 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useDispatch } from 'react-redux'
 import { api, authSlice, useChangePasswordMutation, useLogoutAllMutation } from '../api'
 import { authErrorMessage } from '../errors'
-
-const field = 'w-full rounded-md border border-stone-300 bg-white px-3 py-2 outline-none focus:border-stone-900'
+import { btnOutline, btnPrimary, card, field } from '../ui'
 
 export default function SecuritySettings() {
   const dispatch = useDispatch()
@@ -37,19 +36,19 @@ export default function SecuritySettings() {
   }
 
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="security-heading">
-      <h2 id="security-heading" className="text-lg font-semibold">Security</h2>
+    <section className={`${card} flex flex-col gap-4`} aria-labelledby="security-heading">
+      <h2 id="security-heading" className="font-display text-2xl">Security</h2>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <input name="current" type="password" required autoComplete="current-password" placeholder="Current password" className={field} />
         <input name="next" type="password" required minLength={8} maxLength={128} autoComplete="new-password" placeholder="New password" className={field} />
         <input name="confirm" type="password" required minLength={8} maxLength={128} autoComplete="new-password" placeholder="Confirm new password" className={field} />
-        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        {saved && <p role="status" className="text-sm text-emerald-700">Password changed. Your other devices were signed out.</p>}
-        <button disabled={isLoading} className="self-start rounded-md bg-stone-900 px-4 py-2 text-white disabled:opacity-50">Change password</button>
+        {error && <p role="alert" className="rounded-xl bg-ember/10 px-4 py-3 text-sm text-ember-deep">{error}</p>}
+        {saved && <p role="status" className="rounded-xl bg-sage px-4 py-3 text-sm text-verified">Password changed. Your other devices were signed out.</p>}
+        <button disabled={isLoading} className={`${btnPrimary} self-start`}>Change password</button>
       </form>
-      <div className="border-t border-stone-200 pt-3">
-        <p className="mb-2 text-sm text-stone-600">Lost a device, or signed in somewhere you shouldn't have? End every session, including this one.</p>
-        <button onClick={signOutEverywhere} disabled={signingOut} className="rounded-md border border-stone-300 px-4 py-2 text-sm disabled:opacity-50">Sign out of all devices</button>
+      <div className="flex flex-col items-start gap-3 border-t border-stone-200 pt-5">
+        <p className="text-sm leading-relaxed text-slate">Lost a device, or signed in somewhere you shouldn't have? End every session, including this one.</p>
+        <button onClick={signOutEverywhere} disabled={signingOut} className={btnOutline}>Sign out of all devices</button>
       </div>
     </section>
   )

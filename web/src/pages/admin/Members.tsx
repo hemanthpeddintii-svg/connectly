@@ -40,15 +40,15 @@ export function MemberList() {
         : !data.items.length ? <EmptyState title="No members match"><p>Try a different search or clear the filters.</p></EmptyState>
         : (
           <>
-            <div className={`overflow-x-auto rounded-2xl bg-white ${isFetching ? 'opacity-70' : ''}`}>
+            <div className={`overflow-x-auto rounded-[20px] border border-stone-200 bg-white ${isFetching ? 'opacity-70' : ''}`}>
               <table className="w-full min-w-[640px]">
                 <caption className="sr-only">Members</caption>
                 <thead><tr className="border-b border-stone-200"><th scope="col" className={th}>Member</th><th scope="col" className={th}>Status</th><th scope="col" className={th}>Role</th><th scope="col" className={th}>Gender</th><th scope="col" className={th}>Requests</th><th scope="col" className={th}>Joined</th></tr></thead>
                 <tbody>
                   {data.items.map((m) => (
-                    <tr key={m.memberId} className="border-b border-stone-200 last:border-b-0">
+                    <tr key={m.memberId} className="border-b border-stone-100 transition-colors last:border-b-0 hover:bg-paper/60">
                       <th scope="row" className={`${td} text-left`}>
-                        <Link to={m.memberId} className="font-semibold underline">{m.name}, {m.age}</Link>
+                        <Link to={m.memberId} className="font-medium underline underline-offset-4 decoration-stone-300 hover:decoration-ink">{m.name}, {m.age}</Link>
                         <span className="block text-xs font-normal text-slate">{m.email}</span>
                       </th>
                       <td className={td}><StatusPill status={m.suspended ? 'suspended' : m.status} /></td>
@@ -116,19 +116,19 @@ export function MemberDetail() {
         <section aria-label="Profile" className={`${aCard} flex flex-col gap-4`}>
           <div className="flex items-center gap-3">
             <Monogram name={m.name} size={52} />
-            <div className="flex flex-col gap-1"><h2 className="font-display text-xl font-semibold">{m.name}, {m.age}</h2>
+            <div className="flex flex-col gap-1"><h2 className="font-display text-xl">{m.name}, {m.age}</h2>
               <span className="flex gap-2"><StatusPill status={m.suspended ? 'suspended' : m.status} /><span className="inline-flex h-6 items-center rounded-full bg-mist px-2.5 text-xs font-semibold">{m.role}</span></span></div>
           </div>
           <DL rows={[['Member ID', m.memberId], ['Email', m.email], ['Gender', m.gender ?? '—'], ['City', m.city || '—'], ['Looking for', m.lookingFor || '—'], ['Joined', dateTime(m.joinedAt)],
             ...(m.rejectionReason ? [['Rejection reason', m.rejectionReason] as [string, string]] : [])]} />
         </section>
         <section aria-label="Requests balance" className={`${aCard} flex flex-col gap-4`}>
-          <h2 className="text-sm font-semibold text-slate">Requests balance</h2>
-          <p className="font-display text-4xl font-semibold">{m.requestCredits}</p>
+          <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-slate">Requests balance</h2>
+          <p className="font-display text-4xl">{m.requestCredits}</p>
           <Adjust memberId={m.memberId} balance={m.requestCredits} />
         </section>
         <section aria-label="Verification history" className={aCard}>
-          <h2 className="mb-2 font-display text-lg font-semibold">Verification history</h2>
+          <h2 className="mb-2 font-display text-lg">Verification history</h2>
           {!verifications.length ? <p className="text-sm text-slate">No submissions.</p> : (
             <table className="w-full"><caption className="sr-only">Verification history</caption>
               <thead><tr><th scope="col" className={th}>Submitted</th><th scope="col" className={th}>Status</th><th scope="col" className={th}>Reason</th></tr></thead>
@@ -136,7 +136,7 @@ export function MemberDetail() {
           )}
         </section>
         <section aria-label="Payment history" className={aCard}>
-          <h2 className="mb-2 font-display text-lg font-semibold">Payment history</h2>
+          <h2 className="mb-2 font-display text-lg">Payment history</h2>
           {!payments.length ? <p className="text-sm text-slate">No payments.</p> : (
             <table className="w-full"><caption className="sr-only">Payment history</caption>
               <thead><tr><th scope="col" className={th}>Submitted</th><th scope="col" className={th}>Pack</th><th scope="col" className={th}>Amount</th><th scope="col" className={th}>Status</th></tr></thead>
@@ -144,7 +144,7 @@ export function MemberDetail() {
           )}
         </section>
         <section aria-label="Audit trail" className={`${aCard} lg:col-span-2`}>
-          <h2 className="mb-2 font-display text-lg font-semibold">Audit trail</h2>
+          <h2 className="mb-2 font-display text-lg">Audit trail</h2>
           {!audit.length ? <p className="text-sm text-slate">No admin actions on this member.</p> : (
             <div className="overflow-x-auto"><table className="w-full min-w-[480px]"><caption className="sr-only">Audit trail</caption>
               <thead><tr><th scope="col" className={th}>When</th><th scope="col" className={th}>Action</th><th scope="col" className={th}>Detail</th><th scope="col" className={th}>By</th></tr></thead>

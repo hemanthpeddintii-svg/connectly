@@ -1,4 +1,6 @@
 import PageHeader from '../components/PageHeader'
+import { card } from '../ui'
+import { PageFade, Stagger, StaggerItem } from '../components/motion'
 
 const items = [
   ['Be kind', 'Write to people the way you would like to be written to. Honest and gentle is always welcome.'],
@@ -10,14 +12,14 @@ const items = [
 
 export default function Guidelines() {
   return (
-    <div className="flex flex-col gap-4 pb-4">
+    <PageFade className="flex flex-col gap-6 pb-6">
       <PageHeader title="Community guidelines" back="/settings" backLabel="Back to settings" />
       <p className="text-[15px] text-slate">Five habits that keep this community safe.</p>
-      <ul className="flex flex-col gap-3">
+      <Stagger as="ul" className="flex flex-col gap-3">
         {items.map(([t, d]) => (
-          <li key={t} className="rounded-3xl bg-white p-4"><h2 className="text-base font-semibold">{t}</h2><p className="mt-1 text-[15px] text-slate">{d}</p></li>
+          <StaggerItem as="li" key={t} className={`${card} !p-5`}><h2 className="font-display text-xl">{t}</h2><p className="mt-1.5 text-[15px] leading-relaxed text-slate">{d}</p></StaggerItem>
         ))}
-      </ul>
-    </div>
+      </Stagger>
+    </PageFade>
   )
 }

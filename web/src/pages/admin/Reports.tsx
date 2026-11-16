@@ -18,18 +18,22 @@ export function ReportQueue() {
       {isLoading ? <Loading /> : isError ? <ErrorState what="reports" onRetry={refetch} />
         : !data?.length ? <EmptyState title={`No ${tab} reports`}><p>Nothing to review here.</p></EmptyState>
         : (
-          <div className="overflow-x-auto rounded-2xl bg-white">
+          <div className="overflow-x-auto rounded-[20px] border border-stone-200 bg-white">
             <table className="w-full min-w-[520px]">
               <caption className="sr-only">Reports, {tab}</caption>
               <thead><tr className="border-b border-stone-200"><th scope="col" className={th}>Reason</th><th scope="col" className={th}>Reported member</th><th scope="col" className={th}>Reported</th><th scope="col" className={th}>Status</th><th scope="col" className={th}><span className="sr-only">Open</span></th></tr></thead>
               <tbody>
                 {data.map((r) => (
-                  <tr key={r.report.id} className="border-b border-stone-200 last:border-b-0">
-                    <th scope="row" className={`${td} text-left font-semibold`}>{reasonLabel(r.report.reason)}</th>
+                  <tr key={r.report.id} className={`border-b border-stone-100 transition-colors last:border-b-0 hover:bg-paper/60 ${r.report.status === 'open' && r.report.reason === 'underage' ? 'bg-ember/10' : ''}`}>
+                    <th scope="row" className={`${td} text-left font-medium`}>
+                      {reasonLabel(r.report.reason)}
+                      {r.report.status === 'open' && r.report.reason === 'underage' && <span className="ml-2 rounded-full bg-ember-deep px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-paper">Urgent</span>}
+                      {r.report.status === 'open' && r.report.reason !== 'underage' && Date.now() - r.report.createdAt > 24 * 3_600_000 && <span className="ml-2 rounded-full bg-ember/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-ember-deep">Over 24h</span>}
+                    </th>
                     <td className={td}>{r.reported.name}<span className="block text-xs text-slate">{r.reported.memberId}</span></td>
                     <td className={td}>{ago(r.report.createdAt)}</td>
                     <td className={td}><StatusPill status={r.report.status} /></td>
-                    <td className={`${td} text-right`}><Link to={r.report.id} aria-label={`Review report on ${r.reported.name}`} className="font-semibold underline">Review</Link></td>
+                    <td className={`${td} text-right`}><Link to={r.report.id} aria-label={`Review report on ${r.reported.name}`} className="font-medium underline underline-offset-4 decoration-stone-300 hover:decoration-ink">Review</Link></td>
                   </tr>
                 ))}
               </tbody>
@@ -48,7 +52,7 @@ function Conversation({ reportId, reporterName, reportedName }: { reportId: stri
   return (
     <section aria-label="Conversation" className={`${aCard} flex flex-col gap-3`}>
       <div>
-        <h2 className="font-display text-lg font-semibold">Conversation saved with this report</h2>
+        <h2 className="font-display text-lg">Conversation saved with this report</h2>
         <p className="text-sm text-slate">{sub}</p>
       </div>
       {isLoading ? <Loading /> : isError || !data ? <ErrorState what="the conversation" onRetry={refetch} />
@@ -56,7 +60,7 @@ function Conversation({ reportId, reporterName, reportedName }: { reportId: stri
         : (
           <>
             {data.request && (
-              <div className="rounded-2xl bg-mist px-4 py-3 text-[15px]">
+              <div className="rounded-[16px] bg-mist px-4 py-3 text-[15px]">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate">Request note · {nameOf(data.request.from)} · {dateTime(data.request.at)} · {data.request.status}</p>
                 <p className="mt-1 whitespace-pre-wrap">{data.request.note || <span className="text-slate">No note.</span>}</p>
               </div>
@@ -70,7 +74,7 @@ function Conversation({ reportId, reporterName, reportedName }: { reportId: stri
                     {data.messages.map((m, i) => (
                       <li key={i} className={`flex flex-col gap-0.5 ${m.from === 'reported' ? 'items-end' : 'items-start'}`}>
                         <span className="text-xs text-slate">{nameOf(m.from)} · {dateTime(m.at)}</span>
-                        <span className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-[15px] ${m.from === 'reported' ? 'bg-ember/15' : 'bg-mist'}`}>
+                        <span className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-[15px] ${m.from === 'reported' ? 'bg-mist' : 'bg-mist'}`}>
                           {m.kind === 'text' ? m.body
                             : m.kind === 'voice' ? `Voice message${m.durationMs ? ` (${Math.max(1, Math.round(m.durationMs / 1000))} s)` : ''}`
                               : m.kind === 'image' ? 'Image' : `(${m.kind})`}
@@ -115,7 +119,7 @@ export function ReportCase() {
       {head}
       <div className="grid gap-5 lg:grid-cols-2">
         <section aria-label="Report" className={`${aCard} flex flex-col gap-4`}>
-          <div className="flex items-center gap-3"><h2 className="font-display text-lg font-semibold">{reasonLabel(report.reason)}</h2><StatusPill status={report.status} /></div>
+          <div className="flex items-center gap-3"><h2 className="font-display text-lg">{reasonLabel(report.reason)}</h2><StatusPill status={report.status} /></div>
           <p className="whitespace-pre-wrap text-[15px]">{report.details || <span className="text-slate">No details given.</span>}</p>
           <DL rows={[
             ['Reported', dateTime(report.createdAt)],

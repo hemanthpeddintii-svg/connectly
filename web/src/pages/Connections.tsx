@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useConnectionsQuery, useMeQuery } from '../api'
 import SafetyMenu from '../features/safety/SafetyMenu'
-import { btnPrimary, btnOutline } from '../ui'
+import { btnPrimary, btnOutline, card } from '../ui'
+import { PageFade, Stagger, StaggerItem } from '../components/motion'
 import Monogram from '../components/Monogram'
 import { EmptyState, ErrorState, Loading } from '../components/State'
 import { ChevronIcon } from '../components/icons'
@@ -22,14 +23,14 @@ export default function Connections() {
   const { data, isLoading, isError, refetch } = useConnectionsQuery()
   const man = me?.gender === 'man'
   const sentLink = man && (
-    <Link to="/sent" className="flex min-h-14 items-center justify-between rounded-[22px] bg-white px-5 text-[15px] font-semibold">
+    <Link to="/sent" className={`${card} flex min-h-14 items-center justify-between !px-5 !py-0 text-[15px] font-medium transition hover:border-stone-300`}>
       Requests you've sent <ChevronIcon size={20} />
     </Link>
   )
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1 pt-2">
-        <h1 className="font-display text-[28px] font-semibold leading-tight">Chats</h1>
+    <PageFade className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2 pt-2">
+        <h1 className="font-display text-[34px] leading-tight">Chats</h1>
         <p className="text-[15px] leading-snug text-slate">Free to use. Text and voice, with members who said yes.</p>
       </div>
       {isLoading ? <Loading />
@@ -47,35 +48,35 @@ export default function Connections() {
         ) : (
           <>
             {/* No overflow-hidden here: it would clip the Block/Report menu. The end rows round themselves instead. */}
-            <ul className="flex flex-col rounded-[22px] bg-white">
+            <Stagger as="ul" className="flex flex-col rounded-[22px] border border-stone-200 bg-white">
               {data.map((c) => (
-                <li key={c.id} className="flex items-center border-b border-stone-200 first:rounded-t-[22px] last:rounded-b-[22px] last:border-b-0">
+                <StaggerItem as="li" key={c.id} className="flex items-center border-b border-stone-200 first:rounded-t-[22px] last:rounded-b-[22px] last:border-b-0">
                   <Link to={`/connections/${c.id}`}
                     aria-label={`Chat with ${c.profile.name}, ${c.profile.age}${c.unread ? `, ${c.unread} unread` : ''}`}
                     className="flex min-h-[76px] min-w-0 flex-1 items-center gap-3.5 px-4 py-3">
                     <Monogram name={c.profile.name} size={44} />
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="flex items-baseline justify-between gap-2">
-                        <b className="truncate font-display text-base font-semibold">{c.profile.name}</b>
+                        <b className="truncate font-display text-lg">{c.profile.name}</b>
                         {c.lastMessage && <span className="flex-none text-xs text-slate">{ago(c.lastMessage.createdAt)}</span>}
                       </span>
                       <span className="flex items-center justify-between gap-2">
-                        <span className={`truncate text-[13px] ${c.unread ? 'font-semibold text-ink' : 'text-slate'}`}>
-                          {c.lastMessage ? `${c.lastMessage.mine ? 'You: ' : ''}${c.lastMessage.preview}` : 'Say hello'}
+                        <span className={`truncate text-[13px] ${c.unread ? 'font-medium text-ink' : 'text-slate'}`}>
+                          {c.closed ? 'Chat closed' : c.lastMessage ? `${c.lastMessage.mine ? 'You: ' : ''}${c.lastMessage.preview}` : 'Say hello'}
                         </span>
                         {c.unread > 0 && (
-                          <span className="flex h-6 min-w-6 flex-none items-center justify-center rounded-full bg-ember px-1.5 text-xs font-bold text-ink">{c.unread > 99 ? '99+' : c.unread}</span>
+                          <span className="flex h-6 min-w-6 flex-none items-center justify-center rounded-full bg-ember px-1.5 text-xs font-semibold text-ink">{c.unread > 99 ? '99+' : c.unread}</span>
                         )}
                       </span>
                     </span>
                   </Link>
                   <div className="px-3"><SafetyMenu memberId={c.profile.memberId} /></div>
-                </li>
+                </StaggerItem>
               ))}
-            </ul>
+            </Stagger>
             {sentLink}
           </>
         )}
-    </div>
+    </PageFade>
   )
 }

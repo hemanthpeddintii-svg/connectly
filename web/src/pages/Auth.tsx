@@ -6,13 +6,14 @@ import { authSlice, useLoginMutation, useSignupMutation, type Gender } from '../
 import { betaFullMessage, usePublicConfigQuery } from '../features/beta/api'
 import { btnPrimary, field } from '../ui'
 import { LogoMark } from '../components/icons'
+import { PageFade } from '../components/motion'
 import { useJoinWaitlistMutation, useTrackClickMutation } from '../features/admin/launch'
 import JoiningAs from '../components/JoiningAs'
 
 function Labeled({ id, label, hint, children }: { id: string; label: string; hint?: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-semibold">{label}</label>
+      <label htmlFor={id} className="text-sm font-medium">{label}</label>
       {children}
       {hint && <span id={`${id}-hint`} className="text-[13px] text-slate">{hint}</span>}
     </div>
@@ -35,10 +36,10 @@ export function Waitlist() {
       setDone(true)
     } catch { setErr('Could not add you. Check your email and try again.') }
   }
-  if (done) return <p role="status" className="rounded-2xl bg-mist p-4 text-sm text-verified">Thank you. You're on the waitlist. We'll email you when there is a place for you.</p>
+  if (done) return <p role="status" className="rounded-2xl bg-sage p-4 text-sm text-verified">Thank you. You're on the waitlist. We'll email you when there is a place for you.</p>
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl bg-mist p-4">
-      <h2 className="font-display text-lg font-semibold">Join the waitlist</h2>
+    <form onSubmit={submit} className="flex flex-col gap-3 rounded-[22px] border border-stone-200 bg-white p-5">
+      <h2 className="font-display text-[22px]">Join the waitlist</h2>
       <p className="text-sm text-slate">No code yet? Leave your email and we'll reach out when we can let more people in.</p>
       <Labeled id="wl-email" label="Email"><input id="wl-email" name="wl-email" type="email" required autoComplete="email" className={field} /></Labeled>
       <Labeled id="wl-city" label="City"><input id="wl-city" name="wl-city" autoComplete="address-level2" maxLength={60} className={field} /></Labeled>
@@ -101,11 +102,11 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
 
   const signingUp = mode === 'signup'
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-5 py-8">
-      <LogoMark size={44} />
-      <h1 className="font-display text-[28px] font-semibold leading-tight">{signingUp ? 'Create your account' : 'Welcome back'}</h1>
-      {reset && !signingUp && <p role="status" className="rounded-2xl bg-mist p-3 text-sm text-verified">Password updated. Log in with your new password.</p>}
-      {signingUp && cfg?.betaCity && <p className="-mt-3 text-sm text-slate">We're opening in {cfg.betaCity} first{cfg.inviteOnly ? ', by invite only' : ''}.</p>}
+    <PageFade className="mx-auto flex min-h-dvh max-w-md flex-col gap-7 px-5 py-8">
+      <Link to="/" aria-label="Back to the home page" className="self-start"><LogoMark size={40} /></Link>
+      <h1 className="font-display text-[38px] leading-[1.05]">{signingUp ? 'Create your account' : 'Welcome back'}</h1>
+      {reset && !signingUp && <p role="status" className="rounded-2xl bg-sage p-3 text-sm text-verified">Password updated. Log in with your new password.</p>}
+      {signingUp && cfg?.betaCity && <p className="-mt-4 text-[15px] text-slate">We're opening in {cfg.betaCity} first{cfg.inviteOnly ? ', by invite only' : ''}.</p>}
       <form onSubmit={submit} className="flex flex-col gap-4">
         {signingUp && (
           <div className="grid grid-cols-[1fr_7rem] gap-3">
@@ -133,14 +134,26 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
         {signingUp && (
           <>
             <JoiningAs />
-            <label className="flex cursor-pointer items-start gap-3 text-[13px] leading-snug text-slate">
-              <input type="checkbox" required className="mt-0.5 h-5 w-5 flex-none accent-ink" />
-              <span>I'm 18 or over and agree to the <Link className="font-semibold text-ink underline" to="/values">community values</Link> and <Link className="font-semibold text-ink underline" to="/legal/terms">terms</Link>.</span>
-            </label>
+            <fieldset className="flex flex-col gap-3">
+              <legend className="sr-only">Age and agreement</legend>
+              <label className="flex cursor-pointer items-start gap-3 text-[14px] leading-snug">
+                <input type="checkbox" name="age-18" required className="mt-0.5 h-5 w-5 flex-none accent-ink" />
+                <span>I am 18 years old or older.</span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 text-[14px] leading-snug">
+                <input type="checkbox" name="agree-terms" required className="mt-0.5 h-5 w-5 flex-none accent-ink" />
+                <span>
+                  I have read and agree to the{' '}
+                  <Link className="font-semibold underline underline-offset-2" to="/legal/terms" target="_blank" rel="noopener noreferrer">Terms of use</Link>,{' '}
+                  <Link className="font-semibold underline underline-offset-2" to="/legal/privacy" target="_blank" rel="noopener noreferrer">Privacy policy</Link> and{' '}
+                  <Link className="font-semibold underline underline-offset-2" to="/values" target="_blank" rel="noopener noreferrer">Community values</Link>.
+                </span>
+              </label>
+            </fieldset>
           </>
         )}
-        {error && <p role="alert" className="text-sm text-ember-deep">{error}</p>}
-        <button disabled={l1 || l2} className={btnPrimary}>{signingUp ? 'Create account' : 'Log in'}</button>
+        {error && <p role="alert" className="rounded-xl bg-ember/10 px-4 py-3 text-sm text-ember-deep">{error}</p>}
+        <button disabled={l1 || l2} className={btnPrimary}>{l1 || l2 ? 'One moment…' : signingUp ? 'Create account' : 'Log in'}</button>
       </form>
       {signingUp && cfg?.inviteOnly && (needsWaitlist || !inviteParam) && <Waitlist />}
       {!signingUp && <Link className="text-sm font-medium underline" to="/forgot-password">Forgot your password?</Link>}
@@ -148,6 +161,6 @@ export default function Auth({ mode }: { mode: 'login' | 'signup' }) {
         {signingUp ? <>Already a member? <Link className="font-semibold text-ink underline" to="/login">Log in</Link></>
           : <>New here? <Link className="font-semibold text-ink underline" to="/signup">Create an account</Link></>}
       </p>
-    </div>
+    </PageFade>
   )
 }

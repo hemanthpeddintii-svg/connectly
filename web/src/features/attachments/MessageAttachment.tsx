@@ -7,7 +7,7 @@ export const formatDuration = (ms: number) => {
 }
 
 const bubble = (mine: boolean) =>
-  `${mine ? 'ml-auto bg-ink text-paper' : 'mr-auto bg-mist text-ink'} max-w-[80%] rounded-[20px]`
+  `${mine ? 'ml-auto bg-ink text-paper' : 'mr-auto border border-stone-200 bg-white text-ink'} max-w-[80%] rounded-[20px]`
 
 function VoiceBubble({ connectionId, message }: { connectionId: string; message: Message }) {
   const { url, failed } = useBlobUrl(`/connections/${connectionId}/messages/${message.id}/attachment`)

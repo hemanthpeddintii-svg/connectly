@@ -8,7 +8,7 @@ export default function PageHeader({ title, back, backLabel }: { title: string; 
       <Link to={back} aria-label={backLabel} className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-mist">
         <BackIcon />
       </Link>
-      <h1 className="font-display text-[22px] font-semibold">{title}</h1>
+      <h1 className="font-display text-[26px]">{title}</h1>
     </div>
   )
 }

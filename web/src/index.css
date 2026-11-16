@@ -1,38 +1,61 @@
 @import "tailwindcss";
 
+/*
+  Design language: calm and minimal.
+  One warm canvas, white surfaces with hairline borders, ink for everything that matters, and a single ember dot as the signature.
+  Token names are kept from the first design so every screen picks up the new look; the values are what changed.
+*/
 @theme {
-  --color-stone-50: #F6F1E9;
-  --color-stone-100: #E6EBE7;
-  --color-stone-200: #E3DDD0;
-  --color-stone-300: #CFC8BA;
-  --color-stone-500: #5A6E72;
-  --color-stone-600: #44585D;
+  --color-stone-50: #FAF7F1;
+  --color-stone-100: #F1EDE5;
+  --color-stone-200: #E8E2D7;
+  --color-stone-300: #D6CFC2;
+  --color-stone-500: #66777B;
+  --color-stone-600: #4C6065;
   --color-stone-900: #10252B;
 
   --color-ink: #10252B;
   --color-ember: #F9502C;
-  --color-ember-deep: #C2331A;
-  --color-paper: #F6F1E9;
-  --color-mist: #E6EBE7;
-  --color-slate: #44585D;
+  --color-ember-deep: #BC3014;
+  --color-paper: #FAF7F1;
+  --color-mist: #F1EDE5;
+  --color-slate: #4C6065;
   --color-verified: #1F6F62;
-  --color-fog: #B9CBCD;
+  --color-sage: #E4EFEA;
+  --color-fog: #CBD6D6;
 
-  --font-display: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-soft: 0 1px 2px rgb(16 37 43 / 0.04), 0 12px 32px -16px rgb(16 37 43 / 0.16);
+  --ease-calm: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @layer base {
+  html { -webkit-text-size-adjust: 100%; }
   body {
     background-color: var(--color-paper);
     color: var(--color-ink);
     font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   :focus-visible {
     outline: 2px solid var(--color-ink);
-    outline-offset: 2px;
+    outline-offset: 3px;
+    border-radius: 6px;
   }
+  ::selection { background: rgb(249 80 44 / 0.22); }
 }
+
+/* Headlines: one soft serif weight everywhere, so the older font-semibold classes cannot make it heavy. */
+.font-display {
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  font-variation-settings: 'SOFT' 50;
+  text-wrap: balance;
+}
+p { text-wrap: pretty; }
 
 /* The knock: two soft pulses, then the door opens. Reduced motion shows the final frame only. */
 @keyframes knock-pulse {
@@ -44,33 +67,33 @@
   from { opacity: 0; transform: translateX(-28px); }
   to { opacity: 1; transform: translateX(0); }
 }
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
+@keyframes breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.18); opacity: 0.85; } }
+
+.lp-blink, .lp-breathe { transform-box: fill-box; transform-origin: center; }
+
 @media (prefers-reduced-motion: no-preference) {
   .knock-pulse { animation: knock-pulse 480ms ease-out both; }
   .knock-pulse-late { animation: knock-pulse 480ms ease-out 240ms both; }
   .come-in { animation: come-in 240ms ease-out 240ms both; }
-}
-
-/* Landing page motion. Everything is static unless the visitor allows motion. */
-@keyframes lp-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-@keyframes lp-blink { 0%, 92%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
-@keyframes lp-pop { 0%, 8% { opacity: 0; transform: scale(0.6); } 16%, 70% { opacity: 1; transform: scale(1); } 80%, 100% { opacity: 0; transform: scale(0.9); } }
-@keyframes lp-draw { from { stroke-dashoffset: 40; } to { stroke-dashoffset: 0; } }
-@keyframes lp-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
-@keyframes lp-slide { 0%, 20% { transform: translateX(-14px); opacity: 0; } 45%, 85% { transform: translateX(0); opacity: 1; } 100% { opacity: 0; } }
-.lp-blink { transform-box: fill-box; transform-origin: center; }
-.lp-pop, .lp-pulse, .lp-slide { transform-box: fill-box; transform-origin: center; }
-@media (prefers-reduced-motion: no-preference) {
-  .lp-bob { animation: lp-bob 4.5s ease-in-out infinite; }
-  .lp-bob-2 { animation-delay: -1.5s; }
-  .lp-bob-3 { animation-delay: -3s; }
-  .lp-blink { animation: lp-blink 5s infinite; }
-  .lp-pop { animation: lp-pop 6s ease-in-out infinite; }
-  .lp-pop-2 { animation-delay: 2s; }
-  .lp-pop-3 { animation-delay: 4s; }
-  .lp-reveal:not([data-in]) { opacity: 0; transform: translateY(18px); }
-  .lp-reveal { transition: opacity 600ms ease-out, transform 600ms ease-out; }
-  [data-in] .lp-draw { stroke-dasharray: 40; animation: lp-draw 1.2s ease-out both; }
-  [data-in] .lp-pulse { animation: lp-pulse 2.4s ease-in-out infinite; }
-  [data-in] .lp-slide { animation: lp-slide 4s ease-in-out infinite; }
+  dialog[open] { animation: sheet-up 320ms var(--ease-calm) both; }
+  dialog[open]::backdrop { animation: fade-in 320ms ease-out both; }
+  .lp-bob { animation: bob 5s ease-in-out infinite; }
+  .lp-bob-2 { animation-delay: -1.6s; }
+  .lp-bob-3 { animation-delay: -3.2s; }
+  .lp-blink { animation: blink 5.5s infinite; }
+  .lp-breathe { animation: breathe 3.2s ease-in-out infinite; }
   html.lp-smooth { scroll-behavior: smooth; }
 }
+
+/* FAQ rows: the plus turns into a minus as the row opens. */
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details[open] .faq-plus { transform: rotate(45deg); }
+.faq-plus { transition: transform 240ms var(--ease-calm); }

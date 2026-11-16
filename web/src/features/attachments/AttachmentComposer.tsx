@@ -138,14 +138,14 @@ export default function AttachmentComposer({ connectionId, children }: { connect
 
   if (recording) {
     return (
-      <div className="flex min-h-12 items-center gap-3 rounded-full bg-mist px-4 py-1.5" role="group" aria-label="Recording voice message">
+      <div className="flex min-h-12 items-center gap-3 rounded-full border border-stone-200 bg-white px-4 py-1.5" role="group" aria-label="Recording voice message">
         <span aria-hidden="true" className="h-3 w-3 animate-pulse rounded-full bg-ember motion-reduce:animate-none" />
         <span role="timer" aria-label="Recording time" className="font-mono text-sm tabular-nums">
           {formatDuration(elapsedMs)} / {formatDuration(MAX_VOICE_MS)}
         </span>
         <span className="flex-1" />
-        <button type="button" onClick={() => stopRecording(false)} className="h-11 rounded-full px-3 text-sm font-semibold">Cancel</button>
-        <button type="button" onClick={() => stopRecording(true)} className="h-11 rounded-full bg-ember px-4 text-sm font-semibold text-ink">Send</button>
+        <button type="button" onClick={() => stopRecording(false)} className="h-11 rounded-full px-3 text-sm font-medium text-slate">Cancel</button>
+        <button type="button" onClick={() => stopRecording(true)} className="h-11 rounded-full bg-ink px-4 text-sm font-medium text-paper">Send</button>
       </div>
     )
   }

@@ -24,7 +24,7 @@ export type AdminSettings = {
   quickReasons: { verification: string[]; payment: string[] }
   // Beta controls. Assumed camelCase like the rest of this payload.
   inviteOnly?: boolean; betaFree?: boolean; betaFreeRequests?: number; capWomen?: number; capMen?: number; betaCity?: string
-  supportEmail?: string; supportWhatsapp?: string
+  supportEmail?: string; supportWhatsapp?: string; grievanceName?: string; grievanceEmail?: string
   payCapMen?: number; payCapRupees?: number
 }
 export type BetaMetrics = {

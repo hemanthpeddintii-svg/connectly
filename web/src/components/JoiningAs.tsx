@@ -11,7 +11,7 @@ export default function JoiningAs() {
     <fieldset className="flex flex-col gap-2.5">
       <legend className="mb-2 text-[15px] font-semibold">I'm joining as</legend>
       {JOINING.map((o) => (
-        <label key={o.value} className="flex min-h-[64px] cursor-pointer items-start gap-3 rounded-2xl border border-stone-300 bg-white p-3.5 has-[:checked]:border-ink has-[:checked]:ring-1 has-[:checked]:ring-ink">
+        <label key={o.value} className="flex min-h-[64px] cursor-pointer items-start gap-3 rounded-2xl border border-stone-300 bg-white p-4 transition duration-200 hover:border-stone-500 has-[:checked]:border-ink has-[:checked]:bg-white has-[:checked]:shadow-soft has-[:checked]:ring-1 has-[:checked]:ring-ink">
           <input type="radio" name="joining-as" value={o.value} required className="mt-1 h-5 w-5 flex-none accent-ink" />
           <span className="flex flex-col gap-0.5">
             <b className="text-base">{o.label}</b>

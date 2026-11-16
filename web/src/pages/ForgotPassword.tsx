@@ -2,6 +2,9 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useForgotPasswordMutation } from '../api'
 import { authErrorMessage } from '../errors'
+import { btnPrimary, field } from '../ui'
+import { LogoMark } from '../components/icons'
+import { PageFade } from '../components/motion'
 
 export default function ForgotPassword() {
   const [send, { isLoading }] = useForgotPasswordMutation()
@@ -18,22 +21,22 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-4 p-6">
-      <h1 className="text-2xl font-semibold">Reset your password</h1>
+    <PageFade className="mx-auto flex min-h-dvh max-w-md flex-col gap-7 px-5 py-8">
+      <Link to="/" aria-label="Back to the home page" className="self-start"><LogoMark size={40} /></Link>
+      <h1 className="font-display text-[38px] leading-[1.05]">Reset your password</h1>
       {done ? (
-        <p role="status" className="rounded-md bg-emerald-50 p-3 text-emerald-900">
+        <p role="status" className="rounded-2xl bg-sage p-4 text-sm text-verified">
           If an account exists for that email, we've sent a link to reset the password. It expires in 30 minutes.
         </p>
       ) : (
-        <form onSubmit={submit} className="flex flex-col gap-3">
-          <p className="text-sm text-stone-600">Enter your email and we'll send you a reset link.</p>
-          <input name="email" type="email" required autoComplete="email" placeholder="Email"
-            className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 outline-none focus:border-stone-900" />
-          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-          <button disabled={isLoading} className="rounded-md bg-stone-900 px-3 py-2 font-medium text-white disabled:opacity-50">Send reset link</button>
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <p className="text-[15px] text-slate">Enter your email and we'll send you a reset link.</p>
+          <input name="email" type="email" required autoComplete="email" placeholder="Email" aria-label="Email" className={field} />
+          {error && <p role="alert" className="rounded-xl bg-ember/10 px-4 py-3 text-sm text-ember-deep">{error}</p>}
+          <button disabled={isLoading} className={btnPrimary}>Send reset link</button>
         </form>
       )}
-      <Link className="text-sm underline" to="/login">Back to log in</Link>
-    </div>
+      <Link className="text-sm font-medium underline" to="/login">Back to log in</Link>
+    </PageFade>
   )
 }

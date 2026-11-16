@@ -4,22 +4,29 @@ import {
   useDeleteInviteMutation, useDeleteUnusedInvitesMutation,
   type AdminSettings, type BetaMetrics,
 } from '../../features/admin/api'
+import { motion } from 'motion/react'
+import { PageFade, Reveal, Stagger, StaggerItem, useStill, ease } from '../../components/motion'
 import { ErrorState, Loading } from '../../components/State'
 import { PageTitle, Notice, aCard, aDanger, aField, aOutline, aPrimary, th, td } from '../../components/admin/ui'
 
 const pct = (n: number) => `${Math.round(n * 100)}%`
 
 function Chip({ pass }: { pass: boolean }) {
-  return <span className={`inline-flex h-6 items-center rounded-full px-2.5 text-xs font-semibold ${pass ? 'bg-verified/15 text-verified' : 'bg-ember/15 text-ember-deep'}`}>{pass ? 'Pass' : 'Not yet'}</span>
+  return <span className={`inline-flex h-6 items-center rounded-full px-2.5 text-xs font-semibold ${pass ? 'bg-sage text-verified' : 'bg-ember/10 text-ember-deep'}`}>{pass ? 'Pass' : 'Not yet'}</span>
+}
+
+function Fill({ pct, className }: { pct: number; className: string }) {
+  const still = useStill()
+  return <motion.div className={`h-full rounded-full ${className}`} initial={still ? false : { width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, ease }} />
 }
 
 function Bar({ label, value, target, pass, note }: { label: string; value: number; target: number; pass: boolean; note?: string }) {
   const w = Math.min(100, Math.round((value / target) * 100))
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-2 text-sm"><span className="font-semibold">{label}</span><Chip pass={pass} /></div>
-      <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={target} aria-valuenow={Math.min(value, target)} className="h-2.5 overflow-hidden rounded-full bg-mist">
-        <div className={`h-full rounded-full ${pass ? 'bg-verified' : 'bg-ember'}`} style={{ width: `${w}%` }} />
+      <div className="flex items-center justify-between gap-2 text-sm"><span className="font-medium">{label}</span><Chip pass={pass} /></div>
+      <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={target} aria-valuenow={Math.min(value, target)} className="h-1.5 overflow-hidden rounded-full bg-stone-200">
+        <Fill pct={w} className={pass ? 'bg-sage' : 'bg-ink'} />
       </div>
       {note && <p className="text-[13px] text-slate">{note}</p>}
     </div>
@@ -27,42 +34,42 @@ function Bar({ label, value, target, pass, note }: { label: string; value: numbe
 }
 
 function Stat({ label, children }: { label: string; children: ReactNode }) {
-  return <li className={`${aCard} flex flex-col gap-1`}><h3 className="text-sm font-semibold text-slate">{label}</h3><p className="font-display text-3xl font-semibold">{children}</p></li>
+  return <StaggerItem as="li" className={`${aCard} flex flex-col gap-1`}><h3 className="text-xs font-medium uppercase tracking-[0.14em] text-slate">{label}</h3><p className="font-display text-4xl">{children}</p></StaggerItem>
 }
 
 function Metrics({ m }: { m: BetaMetrics }) {
   const r = m.requests
   return (
     <section aria-labelledby="metrics-title" className="mb-8 flex flex-col gap-4">
-      <h2 id="metrics-title" className="font-display text-lg font-semibold">Metrics</h2>
-      <ul className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <h2 id="metrics-title" className="font-display text-xl">Metrics</h2>
+      <Stagger as="ul" className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Women">{m.members.women}<span className="text-sm font-medium text-slate"> / {m.caps.women}</span></Stat>
         <Stat label="Men">{m.members.men}<span className="text-sm font-medium text-slate"> / {m.caps.men}</span></Stat>
         <Stat label="Verified women">{m.members.verifiedWomen}</Stat>
         <Stat label="Verified men">{m.members.verifiedMen}</Stat>
-      </ul>
+      </Stagger>
       <div className={`${aCard} flex flex-col gap-5`}>
-        <h3 className="font-display text-base font-semibold">Gates</h3>
+        <h3 className="font-display text-lg">Gates</h3>
         <Bar label="Verified women toward 20" value={m.members.verifiedWomen} target={20} pass={m.gates.women20} note={`${m.members.verifiedWomen} of 20`} />
         <Bar label="Verified women toward 30" value={m.members.verifiedWomen} target={30} pass={m.gates.women30} note={`${m.members.verifiedWomen} of 30`} />
         <Bar label="Acceptance rate vs 20%" value={r.acceptanceRate} target={0.2} pass={m.gates.acceptance20} note={`${pct(r.acceptanceRate)} from ${r.sent} requests`} />
         <Bar label="Acceptance rate vs 30%" value={r.acceptanceRate} target={0.3} pass={m.gates.acceptance30} note={`${pct(r.acceptanceRate)} from ${r.sent} requests`} />
         <Bar label="Friends brought toward 10" value={m.friendsBrought} target={10} pass={m.gates.friends10} note={`${m.friendsBrought} of 10`} />
       </div>
-      <ul className="grid gap-3 md:grid-cols-3">
-        <li className={`${aCard} text-sm`}>
-          <h3 className="mb-2 font-semibold text-slate">Requests</h3>
+      <Stagger as="ul" className="grid gap-3 md:grid-cols-3">
+        <StaggerItem as="li" className={`${aCard} text-sm`}>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-slate">Requests</h3>
           <p>Sent {r.sent} · Accepted {r.accepted} · Declined {r.declined} · Pending {r.pending}</p>
-        </li>
-        <li className={`${aCard} text-sm`}>
-          <h3 className="mb-2 font-semibold text-slate">Back in week two</h3>
+        </StaggerItem>
+        <StaggerItem as="li" className={`${aCard} text-sm`}>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-slate">Back in week two</h3>
           <p>Women {m.returnedWeek2.women} · Men {m.returnedWeek2.men}</p>
-        </li>
-        <li className={`${aCard} text-sm`}>
-          <h3 className="mb-2 font-semibold text-slate">Would pay ₹499 for 10</h3>
+        </StaggerItem>
+        <StaggerItem as="li" className={`${aCard} text-sm`}>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-slate">Would pay ₹499 for 10</h3>
           <p>Yes {m.priceInterest.yes} · Maybe {m.priceInterest.maybe} · No {m.priceInterest.no}</p>
-        </li>
-      </ul>
+        </StaggerItem>
+      </Stagger>
     </section>
   )
 }
@@ -128,11 +135,11 @@ function Invites() {
 
   return (
     <section aria-labelledby="invites-title" className="mb-8 flex flex-col gap-4">
-      <h2 id="invites-title" className="font-display text-lg font-semibold">Invites</h2>
+      <h2 id="invites-title" className="font-display text-xl">Invites</h2>
       <form onSubmit={submit} className={`${aCard} grid gap-3 sm:grid-cols-4`}>
-        <label className="flex flex-col gap-1 text-sm font-semibold">How many<input type="number" min={1} max={100} value={count} onChange={(e) => setCount(e.target.value)} className={`${aField} font-normal`} /></label>
-        <label className="flex flex-col gap-1 text-sm font-semibold">Label<input value={label} maxLength={60} placeholder="e.g. Founders' friends" onChange={(e) => setLabel(e.target.value)} className={`${aField} font-normal`} /></label>
-        <label className="flex flex-col gap-1 text-sm font-semibold">Max uses each<input type="number" min={1} value={maxUses} placeholder="Default" onChange={(e) => setMaxUses(e.target.value)} className={`${aField} font-normal`} /></label>
+        <label className="flex flex-col gap-1 text-sm font-medium">How many<input type="number" min={1} max={100} value={count} onChange={(e) => setCount(e.target.value)} className={`${aField} font-normal`} /></label>
+        <label className="flex flex-col gap-1 text-sm font-medium">Label<input value={label} maxLength={60} placeholder="e.g. Founders' friends" onChange={(e) => setLabel(e.target.value)} className={`${aField} font-normal`} /></label>
+        <label className="flex flex-col gap-1 text-sm font-medium">Max uses each<input type="number" min={1} value={maxUses} placeholder="Default" onChange={(e) => setMaxUses(e.target.value)} className={`${aField} font-normal`} /></label>
         <div className="flex items-end"><button disabled={busy} className={`${aPrimary} w-full`}>{busy ? 'Making…' : 'Make codes'}</button></div>
         {msg && <div className="sm:col-span-4"><Notice tone={msg.ok ? 'info' : 'error'}>{msg.text}</Notice></div>}
       </form>
@@ -141,7 +148,7 @@ function Invites() {
           <div className="flex flex-col gap-3">
           {ask && (
             <div role="alertdialog" aria-label="Confirm delete" className={`${aCard} flex flex-col gap-3`}>
-              <p className="text-[15px] font-semibold">{ask.text}</p>
+              <p className="text-[15px] font-medium">{ask.text}</p>
               <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={deleting || clearing} className={`${aDanger} min-h-9 px-4 text-[13px]`}
                   onClick={async () => { const run = ask.yes; setAsk(null); await run() }}>Yes, delete</button>
@@ -153,7 +160,7 @@ function Invites() {
           <div className="flex justify-end">
             <button type="button" disabled={clearing} onClick={removeUnused} className={`${aOutline} min-h-9 px-3 text-[13px]`}>{clearing ? 'Deleting…' : 'Delete unused codes'}</button>
           </div>
-          <div className="overflow-x-auto rounded-2xl bg-white">
+          <div className="overflow-x-auto rounded-[20px] border border-stone-200 bg-white">
             <table className="w-full min-w-[34rem]">
               <thead><tr><th className={th}>Code</th><th className={th}>Label</th><th className={th}>Used</th><th className={th}><span className="sr-only">Copy</span></th></tr></thead>
               <tbody className="divide-y divide-stone-200">
@@ -204,19 +211,19 @@ function BetaSettings() {
       setF(toForm(r)); setMsg({ ok: true, text: 'Saved.' })
     } catch { setMsg({ ok: false, text: 'Could not save settings. Check the values and try again.' }) }
   }
-  const toggle = 'flex min-h-11 items-center gap-3 text-sm font-semibold'
+  const toggle = 'flex min-h-11 items-center gap-3 text-sm font-medium'
   return (
     <section aria-labelledby="bs-title" className="flex flex-col gap-4">
-      <h2 id="bs-title" className="font-display text-lg font-semibold">Beta settings</h2>
+      <h2 id="bs-title" className="font-display text-xl">Beta settings</h2>
       <form onSubmit={submit} className={`${aCard} grid gap-3 sm:grid-cols-2`}>
         <label className={toggle}><input type="checkbox" checked={f.inviteOnly} onChange={(e) => setF({ ...f, inviteOnly: e.target.checked })} className="h-5 w-5 accent-ink" />Invite only signup</label>
         <label className={toggle}><input type="checkbox" checked={f.betaFree} onChange={(e) => setF({ ...f, betaFree: e.target.checked })} className="h-5 w-5 accent-ink" />Free beta (no pack purchases)</label>
-        <label className="flex flex-col gap-1 text-sm font-semibold">Free requests per man<input type="number" min={0} value={f.betaFreeRequests} onChange={(e) => setF({ ...f, betaFreeRequests: e.target.value })} className={`${aField} font-normal`} /></label>
-        <label className="flex flex-col gap-1 text-sm font-semibold">Beta city<input value={f.betaCity} maxLength={60} onChange={(e) => setF({ ...f, betaCity: e.target.value })} className={`${aField} font-normal`} /></label>
-        <label className="flex flex-col gap-1 text-sm font-semibold">Cap, women<input type="number" min={0} value={f.capWomen} onChange={(e) => setF({ ...f, capWomen: e.target.value })} className={`${aField} font-normal`} /></label>
-        <label className="flex flex-col gap-1 text-sm font-semibold">Cap, men<input type="number" min={0} value={f.capMen} onChange={(e) => setF({ ...f, capMen: e.target.value })} className={`${aField} font-normal`} /></label>
-        <label className="flex flex-col gap-1 text-sm font-semibold">Stop pack sales after this many paying men (0 = no limit)<input type="number" min={0} step={1} value={f.payCapMen} onChange={(e) => setF({ ...f, payCapMen: e.target.value })} className={`${aField} font-normal`} /></label>
-        <label className="flex flex-col gap-1 text-sm font-semibold">Stop pack sales after this much in sales, in rupees (0 = no limit)<input type="number" min={0} step={1} value={f.payCapRupees} onChange={(e) => setF({ ...f, payCapRupees: e.target.value })} className={`${aField} font-normal`} /></label>
+        <label className="flex flex-col gap-1 text-sm font-medium">Free requests per man<input type="number" min={0} value={f.betaFreeRequests} onChange={(e) => setF({ ...f, betaFreeRequests: e.target.value })} className={`${aField} font-normal`} /></label>
+        <label className="flex flex-col gap-1 text-sm font-medium">Beta city<input value={f.betaCity} maxLength={60} onChange={(e) => setF({ ...f, betaCity: e.target.value })} className={`${aField} font-normal`} /></label>
+        <label className="flex flex-col gap-1 text-sm font-medium">Cap, women<input type="number" min={0} value={f.capWomen} onChange={(e) => setF({ ...f, capWomen: e.target.value })} className={`${aField} font-normal`} /></label>
+        <label className="flex flex-col gap-1 text-sm font-medium">Cap, men<input type="number" min={0} value={f.capMen} onChange={(e) => setF({ ...f, capMen: e.target.value })} className={`${aField} font-normal`} /></label>
+        <label className="flex flex-col gap-1 text-sm font-medium">Stop pack sales after this many paying men (0 = no limit)<input type="number" min={0} step={1} value={f.payCapMen} onChange={(e) => setF({ ...f, payCapMen: e.target.value })} className={`${aField} font-normal`} /></label>
+        <label className="flex flex-col gap-1 text-sm font-medium">Stop pack sales after this much in sales, in rupees (0 = no limit)<input type="number" min={0} step={1} value={f.payCapRupees} onChange={(e) => setF({ ...f, payCapRupees: e.target.value })} className={`${aField} font-normal`} /></label>
         <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
           <button disabled={saving} className={aPrimary}>{saving ? 'Saving…' : 'Save'}</button>
           {msg && <Notice tone={msg.ok ? 'info' : 'error'}>{msg.text}</Notice>}
@@ -229,11 +236,11 @@ function BetaSettings() {
 export default function Beta() {
   const { data, isLoading, isError, refetch } = useBetaMetricsQuery(undefined, { pollingInterval: 60000 })
   return (
-    <>
+    <PageFade>
       <PageTitle title="Beta" sub="Metrics, invites and beta settings." />
       {isLoading ? <Loading /> : isError || !data ? <ErrorState what="the metrics" onRetry={refetch} /> : <Metrics m={data} />}
       <Invites />
       <BetaSettings />
-    </>
+    </PageFade>
   )
 }
