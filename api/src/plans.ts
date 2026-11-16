@@ -24,6 +24,9 @@ export type Settings = {
   /** Shown to members for help. Empty until the owner sets them. */
   support_email: string
   support_whatsapp: string
+  /** The grievance officer members can complain to (name and email). Empty until the owner names one. */
+  grievance_name: string
+  grievance_email: string
 }
 
 export const DEFAULT_PACKS: PackSetting[] = [
@@ -62,6 +65,8 @@ export function getSettings(): Settings {
     pay_cap_rupees: read<number>('pay_cap_rupees') ?? 0,
     support_email: read<string>('support_email') ?? '',
     support_whatsapp: read<string>('support_whatsapp') ?? '',
+    grievance_name: read<string>('grievance_name') ?? '',
+    grievance_email: read<string>('grievance_email') ?? '',
   }
 }
 

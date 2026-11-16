@@ -42,12 +42,15 @@ const settingsSchema = z.object({
   // Contact details are shown publicly, so they are checked: an email address, and a phone number of 8 to 15 digits.
   support_email: z.string().trim().max(100).refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'bad email').optional(),
   support_whatsapp: z.string().trim().max(25).refine((v) => v === '' || /^\+?[0-9 ()-]{8,25}$/.test(v) && v.replace(/\D/g, '').length >= 8 && v.replace(/\D/g, '').length <= 15, 'bad number').optional(),
+  grievance_name: z.string().trim().max(80).optional(),
+  grievance_email: z.string().trim().max(100).refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'bad email').optional(),
 })
 // The web app may send either snake_case or camelCase beta keys.
 const betaAliases: Record<string, string> = {
   inviteOnly: 'invite_only', betaFree: 'beta_free', betaFreeRequests: 'beta_free_requests',
   capWomen: 'cap_women', capMen: 'cap_men', betaCity: 'beta_city',
   payCapMen: 'pay_cap_men', payCapRupees: 'pay_cap_rupees', supportEmail: 'support_email', supportWhatsapp: 'support_whatsapp',
+  grievanceName: 'grievance_name', grievanceEmail: 'grievance_email',
 }
 const normalizeSettingsBody = (b: unknown) => {
   if (!b || typeof b !== 'object') return b
@@ -63,6 +66,7 @@ const withCamel = (s: ReturnType<typeof getSettings>) => ({
   inviteOnly: s.invite_only, betaFree: s.beta_free, betaFreeRequests: s.beta_free_requests,
   capWomen: s.cap_women, capMen: s.cap_men, betaCity: s.beta_city,
   payCapMen: s.pay_cap_men, payCapRupees: s.pay_cap_rupees, supportEmail: s.support_email, supportWhatsapp: s.support_whatsapp,
+  grievanceName: s.grievance_name, grievanceEmail: s.grievance_email,
 })
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -188,7 +192,7 @@ export async function adminRoutes(app: FastifyInstance) {
       writeSetting('payee', d.payee)
       writeSetting('quickReasons', d.quickReasons)
       const beta: Record<string, unknown> = {}
-      for (const k of ['invite_only', 'beta_free', 'beta_free_requests', 'cap_women', 'cap_men', 'beta_city', 'pay_cap_men', 'pay_cap_rupees', 'support_email', 'support_whatsapp'] as const) {
+      for (const k of ['invite_only', 'beta_free', 'beta_free_requests', 'cap_women', 'cap_men', 'beta_city', 'pay_cap_men', 'pay_cap_rupees', 'support_email', 'support_whatsapp', 'grievance_name', 'grievance_email'] as const) {
         if (d[k] !== undefined) { writeSetting(k, d[k]); beta[k] = d[k] }
       }
       audit(req.user.sub, 'settings.update', null, { packs: d.packs, payeeChanged: true, ...beta })

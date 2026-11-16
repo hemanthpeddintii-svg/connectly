@@ -91,6 +91,8 @@ export async function betaRoutes(app: FastifyInstance) {
       inviteOnly: s.invite_only, betaFree: s.beta_free, betaCity: s.beta_city,
       // How members reach us for help (empty until the owner sets them).
       supportEmail: s.support_email, supportWhatsapp: s.support_whatsapp,
+      // The named grievance officer (IT Rules). Empty until the owner sets one.
+      grievanceName: s.grievance_name, grievanceEmail: s.grievance_email,
     }
   })
 

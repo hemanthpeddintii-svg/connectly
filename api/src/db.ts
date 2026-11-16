@@ -87,6 +87,15 @@ db.exec(`
   const cols = (db.prepare('PRAGMA table_info(users)').all() as { name: string }[]).map((c) => c.name)
   if (cols.includes('bump_id') && !cols.includes('member_id')) db.exec('ALTER TABLE users RENAME COLUMN bump_id TO member_id')
 }
+// A member can close a chat kindly ("taking this offline" or "not the right fit"). The history stays readable; nobody can send more.
+{
+  const cols = (db.prepare('PRAGMA table_info(connections)').all() as { name: string }[]).map((c) => c.name)
+  if (!cols.includes('closed_at')) db.exec('ALTER TABLE connections ADD COLUMN closed_at INTEGER')
+  if (!cols.includes('closed_by')) db.exec('ALTER TABLE connections ADD COLUMN closed_by TEXT')
+  if (!cols.includes('close_kind')) db.exec('ALTER TABLE connections ADD COLUMN close_kind TEXT')
+}
+export const connectionClosed = (connectionId: string) =>
+  !!(db.prepare('SELECT closed_at FROM connections WHERE id = ?').get(connectionId) as { closed_at: number | null } | undefined)?.closed_at
 // When a decided verification's selfie and voice clip were deleted from disk (see deleteDecidedVerificationMedia).
 {
   const cols = (db.prepare('PRAGMA table_info(verifications)').all() as { name: string }[]).map((c) => c.name)
@@ -121,6 +130,17 @@ if (!userCols.includes('city')) db.exec("ALTER TABLE users ADD COLUMN city TEXT 
 if (!userCols.includes('languages')) db.exec("ALTER TABLE users ADD COLUMN languages TEXT NOT NULL DEFAULT '[]'")
 if (!userCols.includes('looking_for')) db.exec("ALTER TABLE users ADD COLUMN looking_for TEXT NOT NULL DEFAULT ''")
 if (!userCols.includes('terms_agreed_at')) db.exec('ALTER TABLE users ADD COLUMN terms_agreed_at INTEGER')
+/**
+ * The version of the terms, privacy policy and community values a member agreed to. Change this string whenever the legal text
+ * changes in a way members should re-accept (for example after the lawyer's final text is published): everyone whose recorded
+ * version is older is asked to agree again before they carry on.
+ */
+export const TERMS_VERSION = '2026-11-11'
+if (!userCols.includes('terms_version')) {
+  db.exec('ALTER TABLE users ADD COLUMN terms_version TEXT')
+  // Members who agreed before versions were recorded agreed to the text as it is today.
+  db.prepare('UPDATE users SET terms_version = ? WHERE terms_agreed_at IS NOT NULL').run(TERMS_VERSION)
+}
 if (!userCols.includes('invited_by')) db.exec('ALTER TABLE users ADD COLUMN invited_by TEXT')
 if (!userCols.includes('beta_credits_granted')) db.exec('ALTER TABLE users ADD COLUMN beta_credits_granted INTEGER NOT NULL DEFAULT 0')
 if (!userCols.includes('price_interest')) db.exec('ALTER TABLE users ADD COLUMN price_interest TEXT')
@@ -187,6 +207,8 @@ if (!msgCols.includes('kind')) db.exec("ALTER TABLE messages ADD COLUMN kind TEX
 if (!msgCols.includes('attachment_file')) db.exec('ALTER TABLE messages ADD COLUMN attachment_file TEXT')
 if (!msgCols.includes('attachment_mime')) db.exec('ALTER TABLE messages ADD COLUMN attachment_mime TEXT')
 if (!msgCols.includes('attachment_duration_ms')) db.exec('ALTER TABLE messages ADD COLUMN attachment_duration_ms INTEGER')
+if (!msgCols.includes('reply_to_id')) db.exec('ALTER TABLE messages ADD COLUMN reply_to_id TEXT')
+if (!msgCols.includes('edited_at')) db.exec('ALTER TABLE messages ADD COLUMN edited_at INTEGER')
 
 // ---- tracking: events, attribution, campaigns, waitlist, launch tracker ----
 if (!userCols.includes('source_kind')) {
@@ -283,6 +305,7 @@ export type UserRow = {
   languages: string
   looking_for: string
   terms_agreed_at: number | null
+  terms_version: string | null
   invited_by: string | null
   beta_credits_granted: number
   price_interest: string | null
@@ -333,7 +356,7 @@ export function selfProfile(u: UserRow) {
     rejectionReason: u.status === 'rejected' ? u.rejection_reason : null,
     gender: u.gender,
     requestCredits: u.request_credits,
-    termsAgreed: u.terms_agreed_at != null,
+    termsAgreed: u.terms_agreed_at != null && u.terms_version === TERMS_VERSION,
     priceInterest: u.price_interest ?? null,
     // True while an admin suspension is in force, so the app can explain why sending is blocked.
     suspended: isSuspendedUser(u.id),

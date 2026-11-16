@@ -54,11 +54,11 @@ after(async () => { proc.kill(); await rm(dir, { recursive: true, force: true })
 
 describe('closed beta', () => {
   it('public-config reflects settings and needs no auth; settings validate', async () => {
-    assert.deepEqual(await j(await call('GET', '/public-config')), { inviteOnly: false, betaFree: false, betaCity: '', supportEmail: '', supportWhatsapp: '' })
+    assert.deepEqual(await j(await call('GET', '/public-config')), { inviteOnly: false, betaFree: false, betaCity: '', supportEmail: '', supportWhatsapp: '', grievanceName: '', grievanceEmail: '' })
     const s = await setSettings({ invite_only: true, beta_city: 'Hyderabad', beta_free_requests: 3 })
     assert.equal(s.invite_only, true)
     assert.equal(s.beta_free_requests, 3)
-    assert.deepEqual(await j(await call('GET', '/public-config')), { inviteOnly: true, betaFree: false, betaCity: 'Hyderabad', supportEmail: '', supportWhatsapp: '' })
+    assert.deepEqual(await j(await call('GET', '/public-config')), { inviteOnly: true, betaFree: false, betaCity: 'Hyderabad', supportEmail: '', supportWhatsapp: '', grievanceName: '', grievanceEmail: '' })
     const cur = await j(await call('GET', '/admin/settings', admin.token))
     const bad = await call('PUT', '/admin/settings', admin.token, { packs: cur.packs, payee: cur.payee, quickReasons: cur.quickReasons, cap_men: -1 })
     assert.equal(bad.status, 400)
@@ -71,7 +71,7 @@ describe('closed beta', () => {
     assert.equal(r.status, 200)
     const out = await j(r)
     assert.deepEqual({ f: out.betaFree, c: out.betaCity, w: out.capWomen, m: out.capMen, n: out.betaFreeRequests, i: out.inviteOnly }, { f: true, c: 'Pune', w: 40, m: 80, n: 7, i: false })
-    assert.deepEqual(await j(await call('GET', '/public-config')), { inviteOnly: false, betaFree: true, betaCity: 'Pune', supportEmail: '', supportWhatsapp: '' })
+    assert.deepEqual(await j(await call('GET', '/public-config')), { inviteOnly: false, betaFree: true, betaCity: 'Pune', supportEmail: '', supportWhatsapp: '', grievanceName: '', grievanceEmail: '' })
     await setSettings({ beta_free: false, beta_city: 'Hyderabad', cap_women: 0, cap_men: 0, beta_free_requests: 3, invite_only: true })
   })
 

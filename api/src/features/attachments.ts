@@ -4,7 +4,7 @@ import { createReadStream } from 'node:fs'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
-import { db, newId, track } from '../db.ts'
+import { connectionClosed, db, newId, track } from '../db.ts'
 import { authed, getUser, requireActive } from '../guards.ts'
 import { UPLOAD_DIR, removeQuietly, sniffAudio, sniffImage, tx } from '../verification.ts'
 import { checkMessageAllowed, errorStatus, notifyMessage, pushToUser } from './hooks.ts'
@@ -81,6 +81,7 @@ export async function attachmentRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string }
     const otherId = otherParticipant(id, req.user.sub)
     if (!otherId) return reply.code(404).send({ error: 'not_found' })
+    if (connectionClosed(id)) return reply.code(409).send({ error: 'chat_closed' })
     const refused = checkMessageAllowed(getUser(req.user.sub)!, otherId)
     if (refused) return reply.code(errorStatus(refused)).send({ error: refused })
     if (!req.isMultipart()) return reply.code(415).send({ error: 'multipart_required' })

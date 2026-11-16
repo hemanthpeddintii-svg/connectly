@@ -412,6 +412,9 @@ export async function trackingRoutes(app: FastifyInstance) {
     const alerts: { level: 'warn' | 'info'; key: string; text: string }[] = []
     const oldVer = num("SELECT COUNT(*) AS n FROM verifications WHERE status = 'pending' AND created_at < ?", now - 48 * HOUR_MS)
     if (oldVer) alerts.push({ level: 'warn', key: 'verification_queue', text: `${oldVer} verification${oldVer === 1 ? '' : 's'} waiting more than 48 hours` })
+    // A report about a possible minor is urgent from the moment it is filed, not after a day.
+    const minors = num("SELECT COUNT(*) AS n FROM reports WHERE status = 'open' AND reason = 'underage'")
+    if (minors) alerts.push({ level: 'warn', key: 'underage_open', text: `${minors} open report${minors === 1 ? '' : 's'} about a possible minor: review and suspend now` })
     const oldRep = num("SELECT COUNT(*) AS n FROM reports WHERE status = 'open' AND created_at < ?", now - DAY_MS)
     if (oldRep) alerts.push({ level: 'warn', key: 'report_open', text: `${oldRep} open report${oldRep === 1 ? '' : 's'} older than 24 hours` })
     const s = getSettings()

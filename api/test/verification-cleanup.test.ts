@@ -163,7 +163,7 @@ describe('support contact settings', () => {
     return A('PUT', '/admin/settings', { packs: cur.packs, payee: cur.payee, quickReasons: cur.quickReasons, ...patch })
   }
   it('are empty by default, public once set, validated, and clearable', async () => {
-    assert.deepEqual(await j(await call('GET', '/public-config')), { inviteOnly: false, betaFree: false, betaCity: '', supportEmail: '', supportWhatsapp: '' })
+    assert.deepEqual(await j(await call('GET', '/public-config')), { inviteOnly: false, betaFree: false, betaCity: '', supportEmail: '', supportWhatsapp: '', grievanceName: '', grievanceEmail: '' })
     const ok = await setSettings({ supportEmail: ' help@example.com ', supportWhatsapp: '+91 98765 43210' })
     assert.equal(ok.status, 200)
     const s = await j(ok)
@@ -176,7 +176,7 @@ describe('support contact settings', () => {
       assert.equal((await setSettings(bad)).status, 400, JSON.stringify(bad))
     }
     assert.equal((await j(await call('GET', '/public-config'))).supportEmail, 'help@example.com', 'a refused change changes nothing')
-    assert.equal((await setSettings({ supportEmail: '', supportWhatsapp: '' })).status, 200)
+    assert.equal((await setSettings({ supportEmail: '', supportWhatsapp: '', grievanceName: '', grievanceEmail: '' })).status, 200)
     const cleared = await j(await call('GET', '/public-config'))
     assert.equal(cleared.supportEmail, '')
     assert.equal(cleared.supportWhatsapp, '')
