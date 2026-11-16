@@ -62,7 +62,7 @@ export default function SendRequest() {
           <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-sage text-verified"><CheckIcon size={20} /></span>
           <div className="flex flex-col">
             <b>{plural(sent.creditsLeft, 'request')} left</b>
-            <span className="text-[13px] text-slate">Each request uses 1, whatever the answer.</span>
+            <span className="text-[13px] text-slate">Used when she answers. Returned if nobody answers in 14 days.</span>
           </div>
         </div>
         <div className="flex w-full flex-col gap-3">

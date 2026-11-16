@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /me
+Disallow: /connections
+Disallow: /requests
+Disallow: /settings
+Disallow: /verify
+Disallow: /wall
+
+Sitemap: https://140-245-192-178.sslip.io/sitemap.xml

@@ -9,10 +9,11 @@ import { btnPrimary, card } from '../ui'
 import { PageFade, Stagger, StaggerItem } from '../components/motion'
 
 // Status is always an icon plus a word, never colour alone.
-const STATUS: Record<RequestStatus, { word: string; icon: typeof ClockIcon; cls: string }> = {
+const STATUS: Record<RequestStatus | 'expired', { word: string; icon: typeof ClockIcon; cls: string }> = {
   pending: { word: 'Waiting', icon: ClockIcon, cls: 'bg-mist text-ink' },
   accepted: { word: 'Accepted', icon: CheckIcon, cls: 'bg-sage text-verified' },
   declined: { word: 'Not now', icon: CloseIcon, cls: 'bg-stone-200 text-slate' },
+  expired: { word: 'Returned', icon: ClockIcon, cls: 'bg-mist text-ink' },
 }
 
 /** Three calm steps: sent, with her, answered. It never shows when she opened it, so nobody feels watched. */
@@ -52,7 +53,7 @@ export default function Sent() {
             <p className="text-[15px] text-slate">Newest first. A member can take her time to answer.</p>
             <Stagger as="ul" className="flex flex-col gap-3">
               {rows.map((r) => {
-                const s = STATUS[r.status]
+                const s = STATUS[r.expiredAt ? 'expired' : r.status]
                 const Icon = s.icon
                 return (
                   <StaggerItem as="li" key={r.id} className={`${card} flex min-h-[76px] items-center gap-3.5 !p-4`}>
@@ -61,6 +62,7 @@ export default function Sent() {
                       <b className="truncate font-display text-lg">{r.to.name}, {r.to.age}</b>
                       {r.status === 'accepted' && r.connectionId
                         ? <Link to={`/connections/${r.connectionId}`} className="inline-flex min-h-11 items-center text-sm font-medium text-ink underline underline-offset-4">Open chat</Link>
+                        : r.expiredAt ? <span className="text-[13px] text-slate">No answer in 14 days. Your request is back in your balance.</span>
                         : <><Steps status={r.status} /><span className="text-[12px] text-slate">{sentAgo(r.createdAt)}</span></>}
                     </div>
                     <span className={`inline-flex h-8 flex-none items-center gap-1.5 rounded-full px-3 text-[13px] font-medium ${s.cls}`}>
@@ -70,7 +72,12 @@ export default function Sent() {
                 )
               })}
             </Stagger>
-            <p className="text-[13px] leading-snug text-slate">Not now is a kind, private answer. Each request uses 1 credit, whatever the reply.</p>
+            {rows.some((r) => r.status === 'declined') && (
+              <p role="note" className="rounded-2xl bg-sage px-4 py-3 text-[14px] leading-snug text-slate">
+                A not now is never about you. Next time, a note that mentions something specific from her profile usually feels more personal.
+              </p>
+            )}
+            <p className="text-[13px] leading-snug text-slate">Not now is a kind, private answer, and it uses the request. If nobody answers in 14 days, it comes back to you.</p>
           </>
         )}
     </PageFade>

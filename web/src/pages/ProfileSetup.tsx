@@ -1,3 +1,4 @@
+import BioPrompts from '../components/BioPrompts'
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useMeQuery, useUpdateMeMutation } from '../api'
@@ -61,6 +62,7 @@ export default function ProfileSetup() {
             <label htmlFor="bio" className="text-sm font-medium">About me</label>
             <textarea id="bio" value={bio} onChange={(e) => setBio(e.target.value)} rows={5} maxLength={500} aria-describedby="bio-count" className={`${field}`} />
             <span id="bio-count" className="self-end text-[13px] text-slate">{bio.length} / 500</span>
+            <BioPrompts onPick={(t) => setBio((b) => (b.trim() ? `${b.trim()}\n${t}` : t).slice(0, 500))} />
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="looking" className="text-sm font-medium">Looking for</label>

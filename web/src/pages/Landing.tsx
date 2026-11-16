@@ -17,13 +17,13 @@ import { feeReason } from '../features/onboarding/policy'
 // All words on this page live here, so they are easy to edit.
 const copy = {
   tagline: 'A verified community for conversation',
-  heroTitle: 'Every member is verified. Nobody is judged on photos.',
-  heroBody: `${BRAND_NAME} is a place to meet people through a short note, not a picture. Everyone is checked by a real person before they come in.`,
+  heroTitle: 'Meet someone through what they say, not how they look.',
+  heroBody: `${BRAND_NAME} is a verified community for conversation. You send a short note, she decides, and nobody is ever judged on a photo.`,
   seeHow: 'See how it works',
   join: 'Join the community',
   joinInvite: 'I have an invite code',
   login: 'Log in',
-  heroHooks: ['Say something real in your first message.', 'No photos to swipe. Just a note.', 'She can say Not now. No explanation needed.'],
+  heroHooks: ['Every member is checked by a real person.', 'No photos to swipe. Just a note.', 'She can say Not now. No explanation needed.'],
   eyebrows: { how: 'Words first', is: 'Simple on purpose', safe: 'Checked by people', faq: 'Good to know' },
   pull1: 'A conversation, not a catalogue.',
   pull2: 'Every first impression is a sentence, not a photo.',
@@ -342,7 +342,8 @@ export default function Landing() {
   const joinLabel = inviteOnly ? copy.joinInvite : copy.join
   const section = 'mx-auto w-full max-w-5xl px-5 py-20'
   return (
-    <div className="min-h-dvh">
+    <div className="relative isolate min-h-dvh">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[760px]" style={{ backgroundImage: seasonWash() }} />
       <header className={`sticky top-0 z-30 transition-colors duration-300 ${scrolled ? 'border-b border-stone-200 bg-paper/85 backdrop-blur-md' : 'border-b border-transparent'}`}>
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-5">
           <span className="flex items-center gap-2.5"><LogoMark size={28} /><span className="font-display text-[23px] leading-none">{BRAND_NAME.toLowerCase()}</span></span>
@@ -350,7 +351,7 @@ export default function Landing() {
         </div>
       </header>
       <main>
-        <section ref={heroRef} style={{ backgroundImage: seasonWash() }} className="mx-auto grid w-full max-w-5xl items-center gap-10 px-5 pb-16 pt-8 md:grid-cols-[1.1fr_1fr] md:pb-24 md:pt-14">
+        <section ref={heroRef} className="mx-auto grid w-full max-w-5xl items-center gap-10 px-5 pb-16 pt-8 md:grid-cols-[1.1fr_1fr] md:pb-24 md:pt-14">
           <div className="flex flex-col gap-6">
             <Reveal y={12}><p className={eyebrow}>{copy.tagline}</p></Reveal>
             <Reveal y={16} delay={0.08}><h1 className="font-display text-[42px] leading-[1.04] md:text-[52px] lg:text-[62px]">{copy.heroTitle}</h1></Reveal>
@@ -393,6 +394,8 @@ export default function Landing() {
             <Reveal delay={0.12}><p className="font-display text-[26px] leading-snug md:text-[30px]">{copy.reqCaption}</p></Reveal>
           </div>
         </section>
+
+        <Pull>{copy.pull3}</Pull>
 
         <section className={section} aria-labelledby="week-h">
           <SectionHead eyebrowText={copy.weekEyebrow} title={copy.weekTitle} id="week-h" />
@@ -468,8 +471,6 @@ export default function Landing() {
             </dl>
           </Reveal>
         </section>
-
-        <Pull>{copy.pull3}</Pull>
 
         <section className="mx-auto w-full max-w-3xl px-5 py-20" aria-labelledby="faq-h">
           <SectionHead eyebrowText={copy.eyebrows.faq} title={copy.faqTitle} id="faq-h" />

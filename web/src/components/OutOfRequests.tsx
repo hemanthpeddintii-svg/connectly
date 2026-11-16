@@ -32,7 +32,7 @@ export default function OutOfRequests() {
       </Stagger>
       <div className="flex flex-col gap-1 text-[13px] leading-snug text-slate">
         <span>You pay by UPI and send us the reference. We check each payment by hand, so it may take a little while.</span>
-        <span>Your chats stay free. A request that gets no answer or a not now isn't refunded.</span>
+        <span>Your chats stay free. A not now uses the request. If nobody answers in 14 days, it comes back to you.</span>
       </div>
       <Link to="/wall" className={`${btnOutline} self-stretch`}>Maybe later</Link>
     </PageFade>

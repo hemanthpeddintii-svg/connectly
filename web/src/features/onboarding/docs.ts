@@ -28,8 +28,8 @@ export const LEGAL_DOCS: LegalDoc[] = [
   {
     slug: 'refunds', title: 'Refund policy', blurb: 'Request packs and payments.',
     sections: [
-      { h: 'In short', p: 'Requests are non-refundable once sent. Selfies and voice clips are never shown to members.' },
-      { h: 'Packs', p: 'A pack adds requests to your balance. Each request sent uses one. Requests do not expire.' },
+      { h: 'In short', p: 'A request is used once she answers. If nobody answers within 14 days, it is returned to your balance automatically. Selfies and voice clips are never shown to members.' },
+      { h: 'Packs', p: 'A pack adds requests to your balance. Each request sent uses one, and it comes back if nobody answers within 14 days. Packs do not expire.' },
       { h: 'Rejected payments', p: 'If we cannot match a payment, we tell you why and you can submit the details again or contact support. [REPLACE WITH REVIEWED TEXT]' },
     ],
   },

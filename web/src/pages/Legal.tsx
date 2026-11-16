@@ -28,7 +28,7 @@ export default function Legal() {
       <section className={card}>
         <h2 className={eyebrow}>In short</h2>
         <ul className="mt-3 list-disc pl-5 text-[15px] leading-relaxed">
-          <li>Requests are non-refundable once sent.</li>
+          <li>A request is used once she answers, and returned if nobody answers in 14 days.</li>
           <li>We never show your selfie or voice clip to members.</li>
           <li>Both files are deleted once our team has decided your review.</li>
         </ul>

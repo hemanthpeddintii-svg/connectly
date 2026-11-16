@@ -23,13 +23,37 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_requests_from ON requests(from_id, created_at);
 `)
 
+// A request nobody answers within 14 days is returned: the credit goes back to the man and the woman no longer sees it.
+{
+  const cols = (db.prepare('PRAGMA table_info(requests)').all() as { name: string }[]).map((c) => c.name)
+  if (!cols.includes('expired_at')) db.exec('ALTER TABLE requests ADD COLUMN expired_at INTEGER')
+}
+export const REQUEST_TTL_MS = 14 * 24 * 60 * 60 * 1000
+
+/** Returns unanswered requests older than the window and gives each man his credit back. Safe to run often. */
+export function expireStaleRequests(now = Date.now()): number {
+  return tx(() => {
+    const stale = db.prepare("SELECT id, from_id FROM requests WHERE status = 'pending' AND expired_at IS NULL AND created_at < ?")
+      .all(now - REQUEST_TTL_MS) as { id: string; from_id: string }[]
+    for (const r of stale) {
+      db.prepare('UPDATE requests SET expired_at = ? WHERE id = ?').run(now, r.id)
+      db.prepare('UPDATE users SET request_credits = request_credits + 1 WHERE id = ?').run(r.from_id)
+      track('request_expired', r.from_id, { requestId: r.id })
+    }
+    return stale.length
+  })
+}
+
 const NOTE_MAX = 300
 const statuses = ['pending', 'accepted', 'declined'] as const
 
-type RequestRow = { id: string; from_id: string; to_id: string; note: string; status: string; connection_id: string | null }
+type RequestRow = { id: string; from_id: string; to_id: string; note: string; status: string; connection_id: string | null; expired_at: number | null }
 
 export async function requestRoutes(app: FastifyInstance) {
   const member = { ...authed, preHandler: [requireActive] }
+
+  expireStaleRequests()
+  setInterval(() => { try { expireStaleRequests() } catch { /* try again next hour */ } }, 60 * 60 * 1000).unref()
 
   // ---- men: send ---------------------------------------------------------
   app.post('/v0/requests', member, async (req, reply) => {
@@ -65,10 +89,11 @@ export async function requestRoutes(app: FastifyInstance) {
 
   app.get('/v0/requests/sent', member, async (req, reply) => {
     if (getUser(req.user.sub)?.gender !== 'man') return reply.code(403).send({ error: 'not_applicable' })
+    expireStaleRequests()
     // Columns are aliased: u.* also has id, status and created_at, which would overwrite the request's own.
     const rows = db.prepare(`
       SELECT r.id AS request_id, r.status AS request_status, r.note AS request_note, r.created_at AS request_created_at,
-             r.connection_id AS request_connection_id, u.*
+             r.connection_id AS request_connection_id, r.expired_at AS request_expired_at, u.*
       FROM requests r JOIN users u ON u.id = r.to_id
       WHERE r.from_id = ? ORDER BY r.created_at DESC LIMIT 100`).all(req.user.sub) as any[]
     return rows.map((r) => ({
@@ -78,12 +103,14 @@ export async function requestRoutes(app: FastifyInstance) {
       createdAt: r.request_created_at as number,
       to: { memberId: r.member_id as string, name: r.name as string, age: r.age as number },
       connectionId: (r.request_connection_id as string | null) ?? null,
+      expiredAt: (r.request_expired_at as number | null) ?? null,
     }))
   })
 
   // ---- women: inbox and decision -----------------------------------------
   app.get('/v0/requests/received', member, async (req, reply) => {
     if (getUser(req.user.sub)?.gender !== 'woman') return reply.code(403).send({ error: 'not_applicable' })
+    expireStaleRequests()
     const q = z.object({ status: z.enum(statuses).default('pending') }).safeParse(req.query)
     if (!q.success) return reply.code(400).send({ error: 'invalid_input' })
     // Same visibility rules as the chats list: blocked or deactivated members don't appear.
@@ -91,7 +118,7 @@ export async function requestRoutes(app: FastifyInstance) {
     const rows = db.prepare(`
       SELECT r.id AS request_id, r.status AS request_status, r.note AS request_note, r.created_at AS request_created_at, u.*
       FROM requests r JOIN users u ON u.id = r.from_id
-      WHERE r.to_id = ? AND r.status = ?${extra.sql} ORDER BY r.created_at DESC LIMIT 100`).all(req.user.sub, q.data.status, ...extra.params) as any[]
+      WHERE r.to_id = ? AND r.status = ? AND r.expired_at IS NULL${extra.sql} ORDER BY r.created_at DESC LIMIT 100`).all(req.user.sub, q.data.status, ...extra.params) as any[]
     return rows.map((r) => ({
       id: r.request_id as string,
       status: r.request_status as string,
@@ -110,6 +137,7 @@ export async function requestRoutes(app: FastifyInstance) {
 
     const r = db.prepare('SELECT * FROM requests WHERE id = ? AND to_id = ?').get(id.data, me.id) as RequestRow | undefined
     if (!r) return reply.code(404).send({ error: 'not_found' })
+    if (r.expired_at) return reply.code(410).send({ error: 'expired' })
     const accept = body.data.decision === 'accept'
 
     if (accept) {

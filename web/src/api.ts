@@ -32,7 +32,7 @@ export type RequestStatus = 'pending' | 'accepted' | 'declined'
 export type ReceivedRequest = { id: string; status: RequestStatus; note: string; createdAt: number; from: Profile }
 export type SentRequest = {
   id: string; status: RequestStatus; note: string; createdAt: number
-  to: { memberId: string; name: string; age: number }; connectionId: string | null
+  to: { memberId: string; name: string; age: number }; connectionId: string | null; expiredAt: number | null
 }
 export type RequestDecision = 'accept' | 'decline'
 export type Message = {

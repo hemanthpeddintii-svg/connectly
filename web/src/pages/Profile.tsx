@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import {
@@ -9,6 +9,7 @@ import { plural } from '../format'
 import { btnPrimary, btnSecondary, card, chip, eyebrow, field } from '../ui'
 import { Loading } from '../components/State'
 import InviteCard from '../components/InviteCard'
+import BioPrompts from '../components/BioPrompts'
 import ShareCards from '../components/ShareCards'
 import TermsGate from '../features/onboarding/TermsGate'
 import { CheckIcon, ChevronIcon } from '../components/icons'
@@ -29,6 +30,7 @@ function Arch({ done }: { done: boolean }) {
 
 export default function Profile() {
   const { data: me, isLoading } = useMeQuery()
+  const bioRef = useRef<HTMLTextAreaElement>(null)
   const isMan = me?.gender === 'man'
   const { data: sent } = useSentRequestsQuery(undefined, { skip: !isMan })
   const { data: received } = useReceivedRequestsQuery(undefined, { skip: me?.gender !== 'woman' })
@@ -167,7 +169,8 @@ export default function Profile() {
           <label className="flex flex-col gap-1.5 text-sm font-medium">City
             <input name="city" defaultValue={me.city} maxLength={60} className={`${field} font-normal`} /></label>
           <label className="flex flex-col gap-1.5 text-sm font-medium">About me
-            <textarea name="bio" defaultValue={me.bio} rows={4} maxLength={500} className={`${field} font-normal`} /></label>
+            <textarea ref={bioRef} name="bio" defaultValue={me.bio} rows={4} maxLength={500} className={`${field} font-normal`} /></label>
+          <BioPrompts onPick={(t) => { const el = bioRef.current; if (el) { el.value = (el.value.trim() ? `${el.value.trim()}\n${t}` : t).slice(0, 500); el.focus() } }} />
           <label className="flex flex-col gap-1.5 text-sm font-medium">Looking for
             <textarea name="lookingFor" defaultValue={me.lookingFor} rows={3} maxLength={300} className={`${field} font-normal`} /></label>
           <label className="flex flex-col gap-1.5 text-sm font-medium">Interests (comma separated)
