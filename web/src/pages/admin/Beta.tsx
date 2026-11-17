@@ -5,7 +5,7 @@ import {
   type AdminSettings, type BetaMetrics,
 } from '../../features/admin/api'
 import { motion } from 'motion/react'
-import { PageFade, Reveal, Stagger, StaggerItem, useStill, ease } from '../../components/motion'
+import { PageFade, Stagger, StaggerItem, useStill, ease } from '../../components/motion'
 import { ErrorState, Loading } from '../../components/State'
 import { PageTitle, Notice, aCard, aDanger, aField, aOutline, aPrimary, th, td } from '../../components/admin/ui'
 

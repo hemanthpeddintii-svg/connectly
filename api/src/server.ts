@@ -1,10 +1,10 @@
-import Fastify from 'fastify'
+import Fastify, { type FastifyError } from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import websocket from '@fastify/websocket'
 import rateLimitPlugin from '@fastify/rate-limit'
 import { z } from 'zod'
-import type { WebSocket } from 'ws'
+import { STATUS_CODES } from 'node:http'
 import {
   connectionClosed, db, hashPassword, newMemberId, newId, TERMS_VERSION, publicProfile, selfProfile, track, trackOnce, verifyPassword, type UserRow,
 } from './db.ts'
@@ -20,7 +20,7 @@ import { requestRoutes } from './requests.ts'
 import { adminRoutes } from './admin.ts'
 import { featureRoutes } from './features/index.ts'
 import {
-  actionGuards, checkMessageAllowed, composeFilters, connectionFilters, errorStatus, notifyMessage, pushToUser, sockets, wallFilters,
+  checkMessageAllowed, composeFilters, connectionFilters, errorStatus, notifyMessage, pushToUser, sockets, wallFilters,
 } from './features/hooks.ts'
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-only-change-me'
@@ -33,7 +33,25 @@ if (process.env.NODE_ENV === 'production' && !process.env.WEB_ORIGIN) {
 }
 
 // Set TRUST_PROXY=true only behind a reverse proxy you control, so rate limits see the real client IP.
-const app = Fastify({ logger: true, trustProxy: process.env.TRUST_PROXY === 'true' })
+// The WebSocket sends its token as ?token=, so it is hidden from request logs.
+const app = Fastify({
+  logger: {
+    serializers: {
+      req: (req) => ({ method: req.method, url: String(req.url).replace(/([?&]token=)[^&]*/g, '$1[hidden]'), host: req.host, remoteAddress: req.ip }),
+    },
+  },
+  trustProxy: process.env.TRUST_PROXY === 'true',
+})
+
+// Unexpected failures are logged in full on the server, but callers only ever see a plain code: no messages, SQL or stack traces.
+app.setErrorHandler((error: FastifyError, req, reply) => {
+  const status = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500
+  if (status >= 500) {
+    req.log.error(error)
+    return reply.code(status).send({ error: 'server_error' })
+  }
+  return reply.code(status).send({ statusCode: status, error: STATUS_CODES[status] ?? 'Bad Request', message: error.message })
+})
 securityHeaders(app)
 await app.register(cors, { origin: process.env.WEB_ORIGIN ?? true })
 await app.register(rateLimitPlugin, { global: false })

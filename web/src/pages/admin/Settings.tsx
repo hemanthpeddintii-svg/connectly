@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAdminSettingsQuery, useSaveAdminSettingsMutation, type AdminSettings } from '../../features/admin/api'
-import { PageFade, Stagger, StaggerItem } from '../../components/motion'
+import { PageFade, Stagger } from '../../components/motion'
 import { ErrorState, Loading } from '../../components/State'
 import { PageTitle, Notice, aCard, aField, aPrimary } from '../../components/admin/ui'
 
